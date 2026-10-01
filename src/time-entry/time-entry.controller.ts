@@ -37,10 +37,7 @@ import {
   UpdateTimeEntryDto,
 } from './dto/time-entry.dto.js';
 
-const TimeEntryPageDto = PaginatedSchema(
-  TimeEntryResponseDto,
-  'TimeEntryPage',
-);
+const TimeEntryPageDto = PaginatedSchema(TimeEntryResponseDto, 'TimeEntryPage');
 
 @ApiTags('time-entries')
 @Protected()
@@ -99,7 +96,8 @@ export class TimeEntryController {
   @RequirePermissions(PERMISSIONS.TIME_ENTRY_VIEW)
   @ApiOperation({
     summary: 'Get the running timer',
-    description: 'Active timer of the caller wrapped in an envelope, null when nothing is running.',
+    description:
+      'Active timer of the caller wrapped in an envelope, null when nothing is running.',
   })
   @ApiResponse({ status: 200, type: ActiveTimerResponseDto })
   @ApiErrors(403)

@@ -40,7 +40,10 @@ export class TimeEntry {
   /** Duration in seconds; live while the timer is running. */
   durationSeconds(now: Date = new Date()): number {
     const end = this.exitTime ?? now;
-    return Math.max(0, Math.floor((end.getTime() - this.entryTime.getTime()) / 1000));
+    return Math.max(
+      0,
+      Math.floor((end.getTime() - this.entryTime.getTime()) / 1000),
+    );
   }
 
   toResponse(now: Date = new Date()) {

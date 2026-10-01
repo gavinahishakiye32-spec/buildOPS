@@ -20,7 +20,10 @@ import {
   Protected,
   RequirePermissions,
 } from '../common/decorators/protected.decorator.js';
-import { PaginationQueryDto, type Paginated } from '../common/pagination.dto.js';
+import {
+  PaginationQueryDto,
+  type Paginated,
+} from '../common/pagination.dto.js';
 import type { AuthContext } from '../common/types.js';
 import { OrganizationService } from './organization.service.js';
 import {
@@ -75,10 +78,7 @@ export class OrganizationController {
     @Auth() auth: AuthContext,
     @Query() query: PaginationQueryDto,
   ): Promise<Paginated<OrganizationResponseDto>> {
-    const page = await this.organizationService.listForUser(
-      auth.userId,
-      query,
-    );
+    const page = await this.organizationService.listForUser(auth.userId, query);
 
     return {
       ...page,

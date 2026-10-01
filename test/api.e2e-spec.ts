@@ -159,7 +159,9 @@ describe('BuildOps operational flow (e2e)', () => {
         (plan: { name: string }) => plan.name === 'Starter',
       );
 
-      const subscription = await asOwner(request(server).post(api('/subscription')))
+      const subscription = await asOwner(
+        request(server).post(api('/subscription')),
+      )
         .send({ planId: starter.id })
         .expect(201);
 
@@ -186,7 +188,9 @@ describe('BuildOps operational flow (e2e)', () => {
       expect(ownerRole).not.toBeNull();
 
       const permissions = await asOwner(
-        request(server).get(api(`/organizations/${organizationId}/roles/${ownerRole!.id}`)),
+        request(server).get(
+          api(`/organizations/${organizationId}/roles/${ownerRole!.id}`),
+        ),
       ).expect(200);
       expect(permissions.body.permissions.length).toBeGreaterThan(20);
     });
@@ -199,7 +203,9 @@ describe('BuildOps operational flow (e2e)', () => {
       expect(refused.body.message).toContain('Plan limit reached');
 
       const organizationRepo = dataSource.getRepository(Organization);
-      expect(await organizationRepo.countBy({ tenant: { userId: ownerId } })).toBe(1);
+      expect(
+        await organizationRepo.countBy({ tenant: { userId: ownerId } }),
+      ).toBe(1);
     });
 
     it('keeps organizations of the same tenant isolated', async () => {
@@ -234,7 +240,9 @@ describe('BuildOps operational flow (e2e)', () => {
       ).expect(200);
       expect(otherTasks.body.items).toEqual([]);
 
-      await asOwner(request(server).patch(api(`/organizations/${organizationId}`)))
+      await asOwner(
+        request(server).patch(api(`/organizations/${organizationId}`)),
+      )
         .send({ status: 'inactive' })
         .expect(200);
 
@@ -243,7 +251,9 @@ describe('BuildOps operational flow (e2e)', () => {
       ).expect(200);
       expect(stillThere.body.id).toBe(otherId);
 
-      await asOwner(request(server).delete(api(`/organizations/${otherId}`))).expect(200);
+      await asOwner(
+        request(server).delete(api(`/organizations/${otherId}`)),
+      ).expect(200);
     });
   });
 
@@ -287,9 +297,9 @@ describe('BuildOps operational flow (e2e)', () => {
         .expect(201);
       expect(allowed.body.name).toBe('Allowed Client');
 
-      await asOwner(request(server).delete(api(`/clients/${allowed.body.id}`))).expect(
-        200,
-      );
+      await asOwner(
+        request(server).delete(api(`/clients/${allowed.body.id}`)),
+      ).expect(200);
 
       // Back to a read-only role for the remaining assertions.
       await asOwner(
@@ -321,7 +331,10 @@ describe('BuildOps operational flow (e2e)', () => {
     });
 
     it('refuses organization context the caller is not a member of', async () => {
-      const outsider = await registerVerified('outsider@example.com', 'Outsider');
+      const outsider = await registerVerified(
+        'outsider@example.com',
+        'Outsider',
+      );
 
       await request(server)
         .get(api('/clients'))
@@ -338,9 +351,7 @@ describe('BuildOps operational flow (e2e)', () => {
         .expect(201);
       teamId = team.body.id;
 
-      await asOwner(
-        request(server).post(api(`/teams/${teamId}/members`)),
-      )
+      await asOwner(request(server).post(api(`/teams/${teamId}/members`)))
         .send({ userId: memberId, role: 'member' })
         .expect(201);
 
@@ -374,7 +385,11 @@ describe('BuildOps operational flow (e2e)', () => {
       expect(project.body.clientId).toBe(clientId);
 
       const badge = await asOwner(request(server).post(api('/badges')))
-        .send({ name: 'Urgent', color: '#ef4444', description: 'Needs attention' })
+        .send({
+          name: 'Urgent',
+          color: '#ef4444',
+          description: 'Needs attention',
+        })
         .expect(201);
       badgeId = badge.body.id;
     });
@@ -455,9 +470,7 @@ describe('BuildOps operational flow (e2e)', () => {
     it('refuses to assign a subtask to a non-member of the task team', async () => {
       const outsider = await registerVerified('helper@example.com', 'Helper');
 
-      await asOwner(
-        request(server).post(api(`/tasks/${taskId}/subtasks`)),
-      )
+      await asOwner(request(server).post(api(`/tasks/${taskId}/subtasks`)))
         .send({ assignedTo: outsider.id, title: 'Not my team' })
         .expect(400);
 
@@ -488,7 +501,9 @@ describe('BuildOps operational flow (e2e)', () => {
     });
 
     it('runs the timer lifecycle and refuses a second concurrent timer', async () => {
-      const started = await asOwner(request(server).post(api('/time-entries/timer/start')))
+      const started = await asOwner(
+        request(server).post(api('/time-entries/timer/start')),
+      )
         .send({ subtaskId })
         .expect(201);
 
@@ -621,7 +636,9 @@ describe('BuildOps operational flow (e2e)', () => {
     });
 
     it('validates payloads with the global validation pipe', async () => {
-      await asOwner(request(server).post(api('/clients'))).send({}).expect(400);
+      await asOwner(request(server).post(api('/clients')))
+        .send({})
+        .expect(400);
 
       await asOwner(request(server).post(api('/clients')))
         .send({ name: 'Bad', unknownField: true })
@@ -638,9 +655,7 @@ describe('BuildOps operational flow (e2e)', () => {
       const projectRepo = dataSource.getRepository(Project);
       const teamRepo = dataSource.getRepository(Team);
 
-      expect(
-        await projectRepo.countBy({ organizationId, clientId }),
-      ).toBe(1);
+      expect(await projectRepo.countBy({ organizationId, clientId })).toBe(1);
       expect(await teamRepo.countBy({ organizationId })).toBe(1);
       expect(await projectRepo.countBy({ organizationId })).toBe(1);
     });

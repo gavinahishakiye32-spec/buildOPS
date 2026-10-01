@@ -87,10 +87,7 @@ export class OrganizationService {
     return organization;
   }
 
-  async update(
-    id: string,
-    dto: UpdateOrganizationDto,
-  ): Promise<Organization> {
+  async update(id: string, dto: UpdateOrganizationDto): Promise<Organization> {
     const organization = await this.findById(id);
 
     if (dto.name !== undefined) {

@@ -23,8 +23,7 @@ export interface IntervalParts {
 
 export type IntervalValue = string | IntervalParts;
 
-const INTERVAL_PATTERN =
-  /(-?\d+(?:\.\d+)?)\s+(year|mon|day|hour|min|sec)s?/g;
+const INTERVAL_PATTERN = /(-?\d+(?:\.\d+)?)\s+(year|mon|day|hour|min|sec)s?/g;
 const CLOCK_PATTERN = /(-)?(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/;
 
 /**
@@ -80,7 +79,9 @@ function pad(value: number, size = 2): string {
  * Renders a PostgreSQL interval as a canonical literal so API responses never
  * expose the driver specific object form.
  */
-export function formatInterval(value: IntervalValue | null | undefined): string | null {
+export function formatInterval(
+  value: IntervalValue | null | undefined,
+): string | null {
   const seconds = parseIntervalSeconds(value);
   if (!seconds) {
     return value === null || value === undefined ? null : '00:00:00';

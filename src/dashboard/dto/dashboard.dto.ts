@@ -16,7 +16,14 @@ import {
   TASK_PRIORITIES,
 } from '../../common/enums.js';
 
-const GROUP_BY = ['user', 'project', 'client', 'task', 'subtask', 'day'] as const;
+const GROUP_BY = [
+  'user',
+  'project',
+  'client',
+  'task',
+  'subtask',
+  'day',
+] as const;
 
 export class DashboardQueryDto {
   @ApiPropertyOptional({
@@ -91,7 +98,8 @@ export class TimeGroupDto {
   @ApiProperty({
     example: 'Ana López',
     nullable: true,
-    description: 'Resolved label when the group is a user, project, client, task or subtask',
+    description:
+      'Resolved label when the group is a user, project, client, task or subtask',
   })
   label: string | null;
 
@@ -153,7 +161,10 @@ export class DashboardOverviewDto {
   @ApiProperty({ type: [StatusCountDto], description: 'Tasks per priority' })
   tasksByPriority: StatusCountDto[];
 
-  @ApiProperty({ type: [TimeGroupDto], description: 'Time aggregated by the requested grouping' })
+  @ApiProperty({
+    type: [TimeGroupDto],
+    description: 'Time aggregated by the requested grouping',
+  })
   timeByGroup: TimeGroupDto[];
 
   @ApiProperty({ type: VarianceSummaryDto })
@@ -222,7 +233,10 @@ export class ClientSummaryDto {
   @ApiProperty({ example: 4 })
   projects: number;
 
-  @ApiProperty({ example: 96000, description: 'Logged seconds across projects' })
+  @ApiProperty({
+    example: 96000,
+    description: 'Logged seconds across projects',
+  })
   totalSeconds: number;
 }
 

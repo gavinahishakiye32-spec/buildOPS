@@ -1,13 +1,14 @@
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiHeader, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiHeader,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
 import { PermissionsGuard } from '../guards/permissions.guard.js';
 import { ORGANIZATION_HEADER } from '../types.js';
 import { ErrorResponseDto } from '../dto/error-response.dto.js';
-import {
-  IS_PUBLIC_KEY,
-  REQUIRED_PERMISSIONS_KEY,
-} from './auth.decorators.js';
+import { IS_PUBLIC_KEY, REQUIRED_PERMISSIONS_KEY } from './auth.decorators.js';
 import type { PermissionName } from '../permissions.js';
 
 /**

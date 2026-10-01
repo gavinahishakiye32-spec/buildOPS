@@ -55,10 +55,7 @@ export class ProjectController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Body() dto: CreateProjectDto,
   ): Promise<ProjectResponseDto> {
-    const project = await this.projectService.create(
-      auth.organizationId,
-      dto,
-    );
+    const project = await this.projectService.create(auth.organizationId, dto);
     return project.toResponse();
   }
 
@@ -125,7 +122,8 @@ export class ProjectController {
   @RequirePermissions(PERMISSIONS.PROJECT_DELETE)
   @ApiOperation({
     summary: 'Delete a project',
-    description: 'Deletes the project with its tasks, subtasks and time entries.',
+    description:
+      'Deletes the project with its tasks, subtasks and time entries.',
   })
   @ApiResponse({ status: 200, type: ProjectMessageResponseDto })
   @ApiErrors(403, 404)

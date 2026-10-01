@@ -32,8 +32,7 @@ describe('AuthController', () => {
       })),
 
       forgotPassword: jest.fn(async () => ({
-        message:
-          'If an account with that email exists, a reset link was sent',
+        message: 'If an account with that email exists, a reset link was sent',
       })),
 
       resetPassword: jest.fn(async () => ({
@@ -96,9 +95,7 @@ describe('AuthController', () => {
   it('delegates verifyEmail to the auth service with the query token', async () => {
     const result = await controller.verifyEmail('verification-token');
 
-    expect(authService.verifyEmail).toHaveBeenCalledWith(
-      'verification-token',
-    );
+    expect(authService.verifyEmail).toHaveBeenCalledWith('verification-token');
 
     expect(result).toEqual({
       message: 'Email verified successfully',
@@ -115,8 +112,7 @@ describe('AuthController', () => {
     expect(authService.forgotPassword).toHaveBeenCalledWith(dto);
 
     expect(result).toEqual({
-      message:
-        'If an account with that email exists, a reset link was sent',
+      message: 'If an account with that email exists, a reset link was sent',
     });
   });
 
@@ -163,10 +159,7 @@ describe('AuthController', () => {
       dto,
     );
 
-    expect(authService.updateProfile).toHaveBeenCalledWith(
-      'user-1',
-      dto,
-    );
+    expect(authService.updateProfile).toHaveBeenCalledWith('user-1', dto);
 
     expect(result).toEqual({
       id: 'user-1',

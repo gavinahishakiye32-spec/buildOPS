@@ -41,12 +41,18 @@ export class CreateProjectDto {
   @IsIn(PROJECT_STATUSES)
   status?: string;
 
-  @ApiPropertyOptional({ example: '2026-10-01', description: 'Delivery start (DATE)' })
+  @ApiPropertyOptional({
+    example: '2026-10-01',
+    description: 'Delivery start (DATE)',
+  })
   @IsOptional()
   @IsDateString()
   startDate?: string;
 
-  @ApiPropertyOptional({ example: '2026-12-31', description: 'Delivery end (DATE)' })
+  @ApiPropertyOptional({
+    example: '2026-12-31',
+    description: 'Delivery end (DATE)',
+  })
   @IsOptional()
   @IsDateString()
   endDate?: string;

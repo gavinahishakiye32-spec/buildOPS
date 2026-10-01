@@ -1,4 +1,3 @@
-
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule, ConfigService } from '@nestjs/config';
@@ -95,12 +94,8 @@ class InMemoryUserService {
     return user;
   }
 
-  async findByVerificationToken(
-    token: string,
-  ): Promise<FakeUser | null> {
-    return (
-      this.users.find((u) => u.verificationToken === token) ?? null
-    );
+  async findByVerificationToken(token: string): Promise<FakeUser | null> {
+    return this.users.find((u) => u.verificationToken === token) ?? null;
   }
 
   async findByResetToken(token: string): Promise<FakeUser | null> {
@@ -137,10 +132,7 @@ class InMemoryUserService {
     });
   }
 
-  async updatePassword(
-    userId: string,
-    password: string,
-  ): Promise<void> {
+  async updatePassword(userId: string, password: string): Promise<void> {
     this.patch(userId, {
       passwordHash: await hash(password, 10),
       resetToken: null,
@@ -223,10 +215,7 @@ class InMemoryUserService {
     return user;
   }
 
-  private patch(
-    userId: string,
-    fields: Partial<FakeUser>,
-  ): void {
+  private patch(userId: string, fields: Partial<FakeUser>): void {
     const user = this.users.find((u) => u.id === userId);
 
     if (user) {
@@ -328,72 +317,57 @@ describe('Swagger documentation (e2e)', () => {
     mailTokens.verify = undefined;
     mailTokens.reset = undefined;
 
-    const moduleFixture: TestingModule =
-      await Test.createTestingModule({
-        imports: [
-          ConfigModule.forRoot({
-            isGlobal: true,
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+        }),
+
+        PassportModule.register({
+          defaultStrategy: 'jwt',
+        }),
+
+        JwtModule.registerAsync({
+          imports: [ConfigModule],
+
+          useFactory: (config: ConfigService) => ({
+            secret: config.get<string>('JWT_SECRET', 'fallback-secret'),
+
+            signOptions: {
+              expiresIn: Number(config.get<string>('JWT_EXPIRATION', '3600')),
+            },
           }),
 
-          PassportModule.register({
-            defaultStrategy: 'jwt',
-          }),
+          inject: [ConfigService],
+        }),
+      ],
 
-          JwtModule.registerAsync({
-            imports: [ConfigModule],
+      controllers: [AuthController],
 
-            useFactory: (config: ConfigService) => ({
-              secret: config.get<string>(
-                'JWT_SECRET',
-                'fallback-secret',
-              ),
+      providers: [
+        AuthService,
 
-              signOptions: {
-                expiresIn: Number(
-                  config.get<string>(
-                    'JWT_EXPIRATION',
-                    '3600',
-                  ),
-                ),
-              },
-            }),
+        JwtStrategy,
 
-            inject: [ConfigService],
-          }),
-        ],
+        {
+          provide: UserService,
+          useValue: userService,
+        },
 
-        controllers: [AuthController],
+        {
+          provide: MailService,
+          useValue: {
+            sendVerificationEmail: async (_email: string, token: string) => {
+              mailTokens.verify = token;
+            },
 
-        providers: [
-          AuthService,
-
-          JwtStrategy,
-
-          {
-            provide: UserService,
-            useValue: userService,
-          },
-
-          {
-            provide: MailService,
-            useValue: {
-              sendVerificationEmail: async (
-                _email: string,
-                token: string,
-              ) => {
-                mailTokens.verify = token;
-              },
-
-              sendResetPasswordEmail: async (
-                _email: string,
-                token: string,
-              ) => {
-                mailTokens.reset = token;
-              },
+            sendResetPasswordEmail: async (_email: string, token: string) => {
+              mailTokens.reset = token;
             },
           },
-        ],
-      }).compile();
+        },
+      ],
+    }).compile();
 
     app = moduleFixture.createNestApplication();
 
@@ -410,15 +384,11 @@ describe('Swagger documentation (e2e)', () => {
 
   describe('OpenAPI document', () => {
     it('exposes the document as JSON on /api/v1/docs-json', async () => {
-      const res = await request(server)
-        .get('/api/v1/docs-json')
-        .expect(200);
+      const res = await request(server).get('/api/v1/docs-json').expect(200);
 
       const doc = res.body as OpenApiDocument;
 
-      expect(res.headers['content-type']).toContain(
-        'application/json',
-      );
+      expect(res.headers['content-type']).toContain('application/json');
 
       expect(doc.info.title).toBe('OPS API');
 
@@ -426,15 +396,11 @@ describe('Swagger documentation (e2e)', () => {
     });
 
     it('does not expose the document as YAML', async () => {
-      await request(server)
-        .get('/api/v1/docs-yaml')
-        .expect(404);
+      await request(server).get('/api/v1/docs-yaml').expect(404);
     });
 
     it('documents every auth endpoint', async () => {
-      const res = await request(server)
-        .get('/api/v1/docs-json')
-        .expect(200);
+      const res = await request(server).get('/api/v1/docs-json').expect(200);
 
       const doc = res.body as OpenApiDocument;
 
@@ -446,19 +412,12 @@ describe('Swagger documentation (e2e)', () => {
     });
 
     it('documents the exact status codes each endpoint returns', async () => {
-      const res = await request(server)
-        .get('/api/v1/docs-json')
-        .expect(200);
+      const res = await request(server).get('/api/v1/docs-json').expect(200);
 
       const doc = res.body as OpenApiDocument;
 
-      for (const {
-        path,
-        method,
-        documentedStatus,
-      } of endpointDocumentation) {
-        const responses =
-          doc.paths[path][method].responses ?? {};
+      for (const { path, method, documentedStatus } of endpointDocumentation) {
+        const responses = doc.paths[path][method].responses ?? {};
 
         expect(Object.keys(responses).sort()).toEqual(
           [...documentedStatus].sort(),
@@ -467,25 +426,18 @@ describe('Swagger documentation (e2e)', () => {
     });
 
     it('documents request payloads and response schemas', async () => {
-      const res = await request(server)
-        .get('/api/v1/docs-json')
-        .expect(200);
+      const res = await request(server).get('/api/v1/docs-json').expect(200);
 
       const doc = res.body as OpenApiDocument;
 
       const schemas = doc.components.schemas;
 
       const registerBody =
-        doc.paths['/auth/register']
-          .post
-          .requestBody
-          ?.content
-          ?.['application/json']
-          ?.schema;
+        doc.paths['/auth/register'].post.requestBody?.content?.[
+          'application/json'
+        ]?.schema;
 
-      expect(registerBody?.$ref).toContain(
-        'RegisterDto',
-      );
+      expect(registerBody?.$ref).toContain('RegisterDto');
 
       for (const model of [
         'RegisterDto',
@@ -511,9 +463,7 @@ describe('Swagger documentation (e2e)', () => {
         'Alice',
       );
 
-      expect(
-        typeof res.body.message,
-      ).toBe('string');
+      expect(typeof res.body.message).toBe('string');
 
       expect(res.body.user).toEqual(
         expect.objectContaining({
@@ -522,13 +472,9 @@ describe('Swagger documentation (e2e)', () => {
         }),
       );
 
-      expect(
-        res.body.access_token,
-      ).toBeUndefined();
+      expect(res.body.access_token).toBeUndefined();
 
-      expect(
-        res.body.user.passwordHash,
-      ).toBeUndefined();
+      expect(res.body.user.passwordHash).toBeUndefined();
     });
 
     it('returns 409 when the email is already registered', async () => {
@@ -565,9 +511,7 @@ describe('Swagger documentation (e2e)', () => {
         })
         .expect(201);
 
-      expect(
-        typeof res.body.access_token,
-      ).toBe('string');
+      expect(typeof res.body.access_token).toBe('string');
     });
 
     it('returns 403 for an unverified email and sends a fresh verification link', async () => {
@@ -701,8 +645,7 @@ describe('Swagger documentation (e2e)', () => {
         .expect(201);
 
       expect(res.body).toEqual({
-        message:
-          'If an account with that email exists, a reset link was sent',
+        message: 'If an account with that email exists, a reset link was sent',
       });
     });
   });
@@ -775,9 +718,7 @@ describe('Swagger documentation (e2e)', () => {
 
   describe('GET /auth/profile', () => {
     it('returns 401 without a bearer token', async () => {
-      await request(server)
-        .get('/auth/profile')
-        .expect(401);
+      await request(server).get('/auth/profile').expect(401);
     });
 
     it('returns 200 with the current user for a valid JWT from a verified account', async () => {
@@ -789,10 +730,7 @@ describe('Swagger documentation (e2e)', () => {
 
       const res = await request(server)
         .get('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${access_token}`,
-        )
+        .set('Authorization', `Bearer ${access_token}`)
         .expect(200);
 
       expect(res.body).toEqual(
@@ -802,9 +740,7 @@ describe('Swagger documentation (e2e)', () => {
         }),
       );
 
-      expect(
-        res.body.passwordHash,
-      ).toBeUndefined();
+      expect(res.body.passwordHash).toBeUndefined();
     });
 
     it('rejects a JWT issued to an unverified account', async () => {
@@ -820,10 +756,7 @@ describe('Swagger documentation (e2e)', () => {
 
       await request(server)
         .get('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${token}`,
-        )
+        .set('Authorization', `Bearer ${token}`)
         .expect(401);
 
       await request(server)
@@ -833,10 +766,7 @@ describe('Swagger documentation (e2e)', () => {
 
       await request(server)
         .get('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${token}`,
-        )
+        .set('Authorization', `Bearer ${token}`)
         .expect(200);
     });
   });
@@ -858,10 +788,7 @@ describe('Swagger documentation (e2e)', () => {
 
       const res = await request(server)
         .patch('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${access_token}`,
-        )
+        .set('Authorization', `Bearer ${access_token}`)
         .send({ name: 'Mal' })
         .expect(200);
 
@@ -874,10 +801,7 @@ describe('Swagger documentation (e2e)', () => {
     });
 
     it('changing the email resets verification and requires re-verification before login', async () => {
-      await registerUser(
-        'nick@example.com',
-        'password123',
-      );
+      await registerUser('nick@example.com', 'password123');
 
       const first = mailTokens.verify;
 
@@ -900,16 +824,11 @@ describe('Swagger documentation (e2e)', () => {
 
       const patched = await request(server)
         .patch('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${access_token}`,
-        )
+        .set('Authorization', `Bearer ${access_token}`)
         .send({ email: 'nick-new@example.com' })
         .expect(200);
 
-      expect(patched.body.email).toBe(
-        'nick-new@example.com',
-      );
+      expect(patched.body.email).toBe('nick-new@example.com');
       expect(patched.body.isVerified).toBe(false);
 
       const fresh = mailTokens.verify;
@@ -954,15 +873,9 @@ describe('Swagger documentation (e2e)', () => {
 
       await request(server)
         .patch('/auth/profile')
-        .set(
-          'Authorization',
-          `Bearer ${access_token}`,
-        )
+        .set('Authorization', `Bearer ${access_token}`)
         .send({ email: 'olivia@example.com' })
         .expect(409);
     });
   });
 });
-
-
-
