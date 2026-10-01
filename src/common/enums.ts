@@ -1,5 +1,18 @@
+/**
+ * Closed value sets shared between validators (`@IsIn`) and the Swagger
+ * `@ApiProperty({ enum })` of the same field, so a documented value can never
+ * be one the validator rejects.
+ *
+ * `USER_STATUSES` covers the whole lifecycle; `SELF_EDITABLE_USER_STATUSES` is
+ * the subset a user may set on their own profile.
+ */
 export const USER_STATUSES = ['active', 'inactive', 'suspended'] as const;
-export type UserStatus = (typeof USER_STATUSES)[number];
+
+export const SELF_EDITABLE_USER_STATUSES = ['active', 'inactive'] as const;
+
+export function isSelfEditableStatus(value: string): boolean {
+  return (SELF_EDITABLE_USER_STATUSES as readonly string[]).includes(value);
+}
 
 export const TENANT_STATUSES = [
   'trial',
@@ -7,17 +20,21 @@ export const TENANT_STATUSES = [
   'cancelled',
   'suspended',
 ] as const;
-export type TenantStatus = (typeof TENANT_STATUSES)[number];
+
+/** Resources a plan caps; the keys of the `max_*` columns on `Plan`. */
+export const PLAN_LIMIT_RESOURCES = [
+  'organizations',
+  'users',
+  'projects',
+] as const;
 
 export const ORGANIZATION_STATUSES = [
   'active',
   'inactive',
   'archived',
 ] as const;
-export type OrganizationStatus = (typeof ORGANIZATION_STATUSES)[number];
 
 export const TEAM_STATUSES = ['active', 'inactive', 'archived'] as const;
-export type TeamStatus = (typeof TEAM_STATUSES)[number];
 
 export const TEAM_MEMBER_STATUSES = [
   'pending',
@@ -25,13 +42,10 @@ export const TEAM_MEMBER_STATUSES = [
   'inactive',
   'removed',
 ] as const;
-export type TeamMemberStatus = (typeof TEAM_MEMBER_STATUSES)[number];
 
 export const TEAM_MEMBER_ROLES = ['lead', 'member', 'observer'] as const;
-export type TeamMemberRole = (typeof TEAM_MEMBER_ROLES)[number];
 
 export const CLIENT_STATUSES = ['active', 'inactive', 'archived'] as const;
-export type ClientStatus = (typeof CLIENT_STATUSES)[number];
 
 export const PROJECT_STATUSES = [
   'planned',
@@ -40,10 +54,8 @@ export const PROJECT_STATUSES = [
   'completed',
   'cancelled',
 ] as const;
-export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
 export const TASK_PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
-export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
 export const TASK_STATUSES = [
   'todo',
@@ -52,7 +64,6 @@ export const TASK_STATUSES = [
   'done',
   'cancelled',
 ] as const;
-export type TaskStatus = (typeof TASK_STATUSES)[number];
 
 export const SUBTASK_STATUSES = [
   'todo',
@@ -60,7 +71,6 @@ export const SUBTASK_STATUSES = [
   'done',
   'cancelled',
 ] as const;
-export type SubtaskStatus = (typeof SUBTASK_STATUSES)[number];
 
 export const TIME_COMPLEXITY_NAMES = [
   'low',
@@ -68,7 +78,8 @@ export const TIME_COMPLEXITY_NAMES = [
   'high',
   'critical',
 ] as const;
-export type TimeComplexityName = (typeof TIME_COMPLEXITY_NAMES)[number];
 
 export const TIME_COMPLEXITY_STATUSES = ['active', 'archived'] as const;
-export type TimeComplexityStatus = (typeof TIME_COMPLEXITY_STATUSES)[number];
+
+/** How a logged duration compares to the subtask's estimation envelope. */
+export const TIME_COMPLEXITY_VARIANCES = ['within', 'under', 'over'] as const;

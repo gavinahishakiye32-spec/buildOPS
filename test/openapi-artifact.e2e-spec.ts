@@ -1,16 +1,18 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { INestApplication } from '@nestjs/common';
 import { AppModule } from '../src/app.module.js';
 import { setupSwagger } from '../src/swagger.setup.js';
-import { API_PREFIX } from '../src/bootstrap.js';
+import { API_PREFIX, configureApp } from '../src/bootstrap.js';
 
-const ARTIFACT = fileURLToPath(
-  new URL('../docs/openapi.json', import.meta.url),
-);
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
+const ARTIFACT = join(ROOT, 'docs', 'openapi.json');
+const REFERENCE = join(ROOT, 'docs', 'api-reference.md');
 
 /**
  * `npm run docs:openapi` sets this flag to rewrite the committed artifact. The
@@ -26,6 +28,10 @@ interface Operation {
   summary?: string;
   description?: string;
   tags?: string[];
+  security?: unknown[];
+  'x-auth'?: { required?: boolean; context?: string };
+  'x-organization-context'?: { required?: boolean };
+  'x-permissions'?: string[];
 }
 
 interface OpenApiDocument {
@@ -59,7 +65,7 @@ describe('OpenAPI artifact (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    app = configureApp(moduleFixture.createNestApplication());
     setupSwagger(app);
     await app.init();
 
@@ -135,5 +141,83 @@ describe('OpenAPI artifact (e2e)', () => {
         expect(committed).toBe(generated);
       });
     }
+  });
+
+  describe('api reference', () => {
+    // The reference is rendered from the same document, by a plain Node script
+    // so it can be run without booting the app. `--check` is the read-only mode
+    // the e2e run uses; the write mode is `npm run docs:reference`.
+    const run = (flag: string): string =>
+      execFileSync(process.execPath, ['scripts/api-reference.mjs', flag], {
+        cwd: ROOT,
+        encoding: 'utf8',
+      });
+
+    if (WRITE) {
+      it('renders docs/api-reference.md', () => {
+        expect(run('--write')).toContain('wrote docs/api-reference.md');
+      });
+    } else {
+      it('matches docs/api-reference.md', () => {
+        expect(run('--check')).toContain('up to date');
+      });
+    }
+
+    it('documents every operation of the document', () => {
+      const reference = readFileSync(REFERENCE, 'utf8');
+      const missing = operations(document)
+        .filter(
+          ([method, path]) => !reference.includes(`### ${method} ${path}`),
+        )
+        .map(([method, path]) => `${method} ${path}`);
+
+      expect(missing).toEqual([]);
+    });
+  });
+
+  describe('access control extensions', () => {
+    it('agrees with the security requirement on every operation', () => {
+      for (const [, , operation] of operations(document)) {
+        const required = operation['x-auth']?.required === true;
+        const secured = Boolean(operation.security);
+
+        expect(required).toBe(secured);
+      }
+    });
+
+    it('never publishes permissions on a public operation', () => {
+      for (const [, , operation] of operations(document)) {
+        if (operation['x-auth']?.required) continue;
+
+        expect(operation['x-permissions']).toBeUndefined();
+      }
+    });
+
+    it('publishes known permissions only', () => {
+      const known = new Set(
+        [
+          ...readFileSync(
+            new URL('../src/common/permissions.ts', import.meta.url),
+            'utf8',
+          ).matchAll(/^\s{2}[A-Z_]+:\s*'([a-z_.]+)'/gm),
+        ].map((match) => match[1]),
+      );
+
+      const unknown = operations(document)
+        .flatMap(([, , operation]) => operation['x-permissions'] ?? [])
+        .filter((permission) => !known.has(permission));
+
+      expect([...new Set(unknown)]).toEqual([]);
+    });
+
+    it('marks the organization requirement on every secured operation', () => {
+      for (const [, , operation] of operations(document)) {
+        if (!operation['x-auth']?.required) continue;
+
+        expect(typeof operation['x-organization-context']?.required).toBe(
+          'boolean',
+        );
+      }
+    });
   });
 });

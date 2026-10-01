@@ -8,10 +8,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Membership, MembershipResolver } from '../common/membership.js';
 import {
-  ALL_PERMISSIONS,
   DEFAULT_ROLE_TEMPLATES,
   isPermissionName,
+  ROLE_TEMPLATE_KEYS,
   type PermissionName,
+  type RoleTemplate,
 } from '../common/permissions.js';
 import { UserService } from '../user/user.service.js';
 import { Permission } from './permission.entity.js';
@@ -378,9 +379,7 @@ export class RoleService extends MembershipResolver {
 
     if (!template) {
       throw new BadRequestException(
-        `Unknown role template "${key}". Allowed: ${DEFAULT_ROLE_TEMPLATES.map(
-          (candidate) => candidate.key,
-        ).join(', ')}`,
+        `Unknown role template "${key}". Allowed: ${ROLE_TEMPLATE_KEYS.join(', ')}`,
       );
     }
 
@@ -455,12 +454,5 @@ export class RoleService extends MembershipResolver {
   }
 }
 
-/** Public catalog of the default role templates and every known permission. */
-export const ROLE_TEMPLATES = DEFAULT_ROLE_TEMPLATES.map((template) => ({
-  key: template.key,
-  name: template.name,
-  description: template.description,
-  permissions: template.permissions,
-}));
-
-export const PERMISSION_CATALOG: PermissionName[] = ALL_PERMISSIONS;
+/** The default templates as served by `GET /role-templates`. */
+export const ROLE_TEMPLATES: RoleTemplate[] = DEFAULT_ROLE_TEMPLATES;

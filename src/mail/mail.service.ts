@@ -12,10 +12,9 @@ export class MailService {
   private readonly transporter: Transporter;
 
   constructor(private readonly config: ConfigService) {
-    this.from = this.config.get<string>(
-      'EMAIL_FROM',
-      'ops-app <onboarding@resend.dev>',
-    );
+    // No provider-specific default: `EMAIL_FROM` has to be an address the
+    // configured SMTP server is willing to relay.
+    this.from = this.config.get<string>('EMAIL_FROM', 'no-reply@localhost');
 
     this.transporter = this.createTransport();
   }

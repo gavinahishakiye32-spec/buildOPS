@@ -12,6 +12,7 @@ import {
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
+import { TIME_COMPLEXITY_VARIANCES } from '../common/enums.js';
 import { Project } from '../project/project.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
 import { Task } from '../task/task.entity.js';
@@ -237,7 +238,7 @@ export class TimeComplexityService {
     actualSeconds: number,
     minSeconds: number,
     maxSeconds: number,
-  ): string {
+  ): (typeof TIME_COMPLEXITY_VARIANCES)[number] {
     if (actualSeconds < minSeconds) {
       return 'under';
     }
