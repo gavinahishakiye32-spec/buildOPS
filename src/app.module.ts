@@ -8,6 +8,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENTITIES } from './common/entities.js';
+import { isProduction } from './common/env.js';
 import { PlanModule } from './plan/plan.module.js';
 import { TenantModule } from './tenant/tenant.module.js';
 import { OrganizationModule } from './organization/organization.module.js';
@@ -31,10 +32,13 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
         host: config.get<string>('DB_HOST', 'localhost'),
         port: config.get<number>('DB_PORT', 5432),
         username: config.get<string>('DB_USERNAME', 'postgres'),
-        password: config.get<string>('DB_PASSWORD', 'postgres'),
+        password: config.get<string>('DB_PASSWORD') || 'postgres',
         database: config.get<string>('DB_DATABASE', 'ops'),
         entities: ENTITIES,
-        synchronize: config.get<string>('NODE_ENV') !== 'production',
+        // Schema synchronization is a development convenience only: it derives
+        // tables from the entities and can drop columns on rename. Production
+        // uses the migrations/schema in schema.sql instead.
+        synchronize: !isProduction(config),
       }),
       inject: [ConfigService],
     }),

@@ -12,6 +12,7 @@ import {
   PASSWORD_PATTERN,
   PASSWORD_RULE_MESSAGE,
 } from '../../common/password.js';
+import { SELF_EDITABLE_USER_STATUSES } from '../../common/enums.js';
 
 export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'Someone' })
@@ -26,9 +27,12 @@ export class UpdateProfileDto {
   @MaxLength(255)
   email?: string;
 
-  @ApiPropertyOptional({ example: 'active', enum: ['active', 'inactive'] })
+  @ApiPropertyOptional({
+    example: 'active',
+    enum: SELF_EDITABLE_USER_STATUSES,
+  })
   @IsOptional()
-  @IsIn(['active', 'inactive'])
+  @IsIn(SELF_EDITABLE_USER_STATUSES)
   status?: string;
 
   @ApiPropertyOptional({

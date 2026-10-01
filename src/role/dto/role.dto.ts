@@ -8,7 +8,10 @@ import {
   IsUUID,
   Length,
 } from 'class-validator';
-import { ALL_PERMISSIONS } from '../../common/permissions.js';
+import {
+  ALL_PERMISSIONS,
+  ROLE_TEMPLATE_KEYS,
+} from '../../common/permissions.js';
 
 export class CreateRoleDto {
   @ApiProperty({ example: 'Developer', description: 'Role name' })
@@ -98,23 +101,13 @@ export class AddMemberDto {
 
   @ApiPropertyOptional({
     example: 'developer',
-    enum: ['owner', 'project_manager', 'developer', 'tester', 'viewer'],
+    enum: ROLE_TEMPLATE_KEYS,
     description:
       'Default role template to grant. Defaults to "viewer" when neither roleId nor templateKey is given.',
   })
   @IsOptional()
   @IsString()
   templateKey?: string;
-}
-
-export class AddMemberFromTemplateDto {
-  @ApiProperty({
-    example: 'developer',
-    enum: ['owner', 'project_manager', 'developer', 'tester', 'viewer'],
-    description: 'Default role template to apply',
-  })
-  @IsString()
-  templateKey: string;
 }
 
 export class UpdateMemberDto {

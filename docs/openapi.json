@@ -85,7 +85,7 @@
             "name": "token",
             "required": true,
             "in": "query",
-            "description": "Verification token received by email (printed to the server console)",
+            "description": "Verification token received by email. The frontend should read `?token=` and call this endpoint.",
             "schema": {
               "type": "string"
             }
@@ -198,7 +198,14 @@
             }
           },
           "401": {
-            "description": "Missing or invalid token"
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -209,7 +216,15 @@
         "summary": "Get current user profile",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       },
       "patch": {
         "description": "Updates the name and/or email of the authenticated user. Changing the email resets verification and sends a fresh verification link.",
@@ -240,7 +255,14 @@
             "description": "Invalid profile update or current password"
           },
           "401": {
-            "description": "Missing or invalid token"
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
           },
           "409": {
             "description": "Email already registered"
@@ -254,7 +276,15 @@
         "summary": "Update current user profile",
         "tags": [
           "auth"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       }
     },
     "/plans": {
@@ -361,7 +391,15 @@
         "summary": "Subscribe to a plan",
         "tags": [
           "subscription"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       },
       "get": {
         "description": "Returns the tenant subscription of the authenticated user with the attached plan and current usage against every plan limit.",
@@ -410,7 +448,15 @@
         "summary": "Get current subscription",
         "tags": [
           "subscription"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       },
       "delete": {
         "description": "Cancels the subscription. Data is preserved but capacity-consuming operations are refused until the subscription is reactivated by subscribing again.",
@@ -459,7 +505,15 @@
         "summary": "Cancel subscription",
         "tags": [
           "subscription"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       }
     },
     "/subscription/usage": {
@@ -513,7 +567,15 @@
         "summary": "Get plan usage",
         "tags": [
           "subscription"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       }
     },
     "/subscription/plan": {
@@ -584,7 +646,15 @@
         "summary": "Change plan",
         "tags": [
           "subscription"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       }
     },
     "/organizations/{organizationId}/roles": {
@@ -646,6 +716,19 @@
         "summary": "List roles",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.view"
         ]
       },
       "post": {
@@ -743,6 +826,19 @@
         "summary": "Create a role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.create"
         ]
       }
     },
@@ -805,6 +901,19 @@
         "summary": "List role templates",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.view"
         ]
       }
     },
@@ -867,6 +976,19 @@
         "summary": "List organization members",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.view"
         ]
       },
       "post": {
@@ -964,6 +1086,19 @@
         "summary": "Add a member",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.invite"
         ]
       }
     },
@@ -1051,6 +1186,19 @@
         "summary": "Change a member's role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.update"
         ]
       },
       "delete": {
@@ -1126,6 +1274,19 @@
         "summary": "Remove a member",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.remove"
         ]
       }
     },
@@ -1203,6 +1364,19 @@
         "summary": "Get a role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.view"
         ]
       },
       "patch": {
@@ -1288,6 +1462,19 @@
         "summary": "Update a role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.update"
         ]
       },
       "delete": {
@@ -1363,6 +1550,19 @@
         "summary": "Delete a role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.delete"
         ]
       }
     },
@@ -1460,6 +1660,19 @@
         "summary": "Replace role permissions",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.update"
         ]
       }
     },
@@ -1567,6 +1780,19 @@
         "summary": "Assign a role to a member",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.assign"
         ]
       },
       "delete": {
@@ -1642,6 +1868,19 @@
         "summary": "Unassign a role",
         "tags": [
           "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "role.assign"
         ]
       }
     },
@@ -1710,7 +1949,15 @@
         "summary": "Create an organization",
         "tags": [
           "organizations"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       },
       "get": {
         "description": "Organizations owned by the subscription of the authenticated user (tenant isolation, spec §4.3).",
@@ -1780,7 +2027,15 @@
         "summary": "List organizations",
         "tags": [
           "organizations"
-        ]
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": false
+        }
       }
     },
     "/organizations/{organizationId}": {
@@ -1857,6 +2112,19 @@
         "summary": "Get an organization",
         "tags": [
           "organizations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "organization.view"
         ]
       },
       "patch": {
@@ -1952,6 +2220,19 @@
         "summary": "Update an organization",
         "tags": [
           "organizations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "organization.update"
         ]
       },
       "delete": {
@@ -2027,6 +2308,19 @@
         "summary": "Delete an organization",
         "tags": [
           "organizations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "organization.delete"
         ]
       }
     },
@@ -2106,6 +2400,19 @@
         "summary": "Create a team",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.create"
         ]
       },
       "get": {
@@ -2186,6 +2493,19 @@
         "summary": "List teams",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.view"
         ]
       }
     },
@@ -2263,6 +2583,19 @@
         "summary": "Get a team",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.view"
         ]
       },
       "patch": {
@@ -2358,6 +2691,19 @@
         "summary": "Update a team",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.update"
         ]
       },
       "delete": {
@@ -2433,6 +2779,19 @@
         "summary": "Delete a team",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.delete"
         ]
       }
     },
@@ -2513,6 +2872,19 @@
         "summary": "List team members",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.view"
         ]
       },
       "post": {
@@ -2618,6 +2990,19 @@
         "summary": "Add a team member",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.member.add"
         ]
       }
     },
@@ -2723,6 +3108,19 @@
         "summary": "Update a team membership",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.member.add"
         ]
       },
       "delete": {
@@ -2806,6 +3204,19 @@
         "summary": "Remove a team member",
         "tags": [
           "teams"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "team.member.remove"
         ]
       }
     },
@@ -2895,6 +3306,19 @@
         "summary": "Create a client",
         "tags": [
           "clients"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "client.create"
         ]
       },
       "get": {
@@ -2975,6 +3399,19 @@
         "summary": "List clients",
         "tags": [
           "clients"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "client.view"
         ]
       }
     },
@@ -3052,6 +3489,19 @@
         "summary": "Get a client",
         "tags": [
           "clients"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "client.view"
         ]
       },
       "patch": {
@@ -3157,6 +3607,19 @@
         "summary": "Update a client",
         "tags": [
           "clients"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "client.update"
         ]
       },
       "delete": {
@@ -3232,6 +3695,19 @@
         "summary": "Delete a client",
         "tags": [
           "clients"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "client.delete"
         ]
       }
     },
@@ -3321,6 +3797,19 @@
         "summary": "Create a project",
         "tags": [
           "projects"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "project.create"
         ]
       },
       "get": {
@@ -3427,6 +3916,19 @@
         "summary": "List projects",
         "tags": [
           "projects"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "project.view"
         ]
       }
     },
@@ -3504,6 +4006,19 @@
         "summary": "Get a project",
         "tags": [
           "projects"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "project.view"
         ]
       },
       "patch": {
@@ -3599,6 +4114,19 @@
         "summary": "Update a project",
         "tags": [
           "projects"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "project.update"
         ]
       },
       "delete": {
@@ -3674,6 +4202,19 @@
         "summary": "Delete a project",
         "tags": [
           "projects"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "project.delete"
         ]
       }
     },
@@ -3753,6 +4294,19 @@
         "summary": "Create a badge",
         "tags": [
           "badges"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "badge.create"
         ]
       },
       "get": {
@@ -3833,6 +4387,19 @@
         "summary": "List badges",
         "tags": [
           "badges"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "badge.view"
         ]
       }
     },
@@ -3910,6 +4477,19 @@
         "summary": "Get a badge",
         "tags": [
           "badges"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "badge.view"
         ]
       },
       "patch": {
@@ -4005,6 +4585,19 @@
         "summary": "Update a badge",
         "tags": [
           "badges"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "badge.update"
         ]
       },
       "delete": {
@@ -4080,6 +4673,19 @@
         "summary": "Delete a badge",
         "tags": [
           "badges"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "badge.delete"
         ]
       }
     },
@@ -4169,6 +4775,19 @@
         "summary": "Create a task",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "task.create"
         ]
       },
       "get": {
@@ -4307,6 +4926,19 @@
         "summary": "List tasks",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "task.view"
         ]
       }
     },
@@ -4384,6 +5016,19 @@
         "summary": "Get a task",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "task.view"
         ]
       },
       "patch": {
@@ -4479,6 +5124,19 @@
         "summary": "Update a task",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "task.update"
         ]
       },
       "delete": {
@@ -4554,6 +5212,19 @@
         "summary": "Delete a task",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "task.delete"
         ]
       }
     },
@@ -4677,6 +5348,19 @@
         "summary": "List subtasks",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.view"
         ]
       },
       "post": {
@@ -4772,6 +5456,20 @@
         "summary": "Create a subtask",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.create",
+          "subtask.assign"
         ]
       }
     },
@@ -4857,6 +5555,19 @@
         "summary": "Get a subtask",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.view"
         ]
       },
       "patch": {
@@ -4960,6 +5671,19 @@
         "summary": "Update a subtask",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.update"
         ]
       },
       "delete": {
@@ -5043,6 +5767,19 @@
         "summary": "Delete a subtask",
         "tags": [
           "tasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.delete"
         ]
       }
     },
@@ -5142,6 +5879,19 @@
         "summary": "Log time manually",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.create"
         ]
       },
       "get": {
@@ -5251,6 +6001,19 @@
         "summary": "List time entries",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.view"
         ]
       }
     },
@@ -5310,6 +6073,19 @@
         "summary": "Get the running timer",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.view"
         ]
       }
     },
@@ -5409,6 +6185,19 @@
         "summary": "Start a timer",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.start_timer"
         ]
       }
     },
@@ -5508,6 +6297,19 @@
         "summary": "Stop a timer",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.stop_timer"
         ]
       }
     },
@@ -5585,6 +6387,19 @@
         "summary": "Get a time entry",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.view"
         ]
       },
       "patch": {
@@ -5680,6 +6495,19 @@
         "summary": "Update a time entry",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.update"
         ]
       },
       "delete": {
@@ -5755,6 +6583,19 @@
         "summary": "Delete a time entry",
         "tags": [
           "time-entries"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_entry.delete"
         ]
       }
     },
@@ -5854,6 +6695,19 @@
         "summary": "Define a time complexity envelope",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.create"
         ]
       },
       "get": {
@@ -5980,6 +6834,19 @@
         "summary": "List time complexity envelopes",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.view"
         ]
       }
     },
@@ -6060,6 +6927,19 @@
         "summary": "Variance for a task",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.view"
         ]
       }
     },
@@ -6137,6 +7017,19 @@
         "summary": "Get a time complexity envelope",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.view"
         ]
       },
       "patch": {
@@ -6242,6 +7135,19 @@
         "summary": "Update a time complexity envelope",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.update"
         ]
       },
       "delete": {
@@ -6317,6 +7223,19 @@
         "summary": "Delete a time complexity envelope",
         "tags": [
           "time-complexity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "time_complexity.delete"
         ]
       }
     },
@@ -6444,6 +7363,19 @@
         "summary": "Operational overview",
         "tags": [
           "dashboard"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "dashboard.view"
         ]
       }
     },
@@ -6571,6 +7503,19 @@
         "summary": "Project progress",
         "tags": [
           "dashboard"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "dashboard.view"
         ]
       }
     },
@@ -6698,6 +7643,19 @@
         "summary": "Client workload",
         "tags": [
           "dashboard"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "dashboard.view"
         ]
       }
     },
@@ -6785,13 +7743,26 @@
         "summary": "Overdue subtasks",
         "tags": [
           "dashboard"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "dashboard.view"
         ]
       }
     }
   },
   "info": {
     "title": "OPS API",
-    "description": "Multi-tenant operations API: authentication, subscription plans,\norganizations with role-based permissions, teams, clients, projects, tasks,\nsubtasks, time tracking and time-complexity estimation.\n\nAuthentication is a stateless bearer JWT sent in the `Authorization` header.\nOrganization-scoped routes additionally require the active organization in the\n`x-organization-id` header, or in an `:organizationId` path segment, which\ntakes precedence when both are sent; your membership in that organization is\nverified on every call and the permissions of your role decide what is allowed.\n\nRecord collections are paginated with the `page` and `limit` query parameters\nand wrapped as `{ items, total, page, limit }`. A few catalogue endpoints\n(`/plans`, `/subscription/usage`, roles, role templates, members, team members\nand time-complexity variance) answer with a plain JSON array instead.\n\nEvery response body is JSON, errors included: errors carry a `statusCode`, a\n`message` and a `path`, and list `error` when several fields are invalid.",
+    "description": "Multi-tenant operations API: authentication, subscription plans,\norganizations with role-based permissions, teams, clients, projects, tasks,\nsubtasks, time tracking and time-complexity estimation.\n\nAuthentication is a stateless bearer JWT sent in the `Authorization` header.\nOrganization-scoped routes additionally require the active organization in the\n`x-organization-id` header, or in an `:organizationId` path segment, which\ntakes precedence when both are sent; your membership in that organization is\nverified on every call and the permissions of your role decide what is allowed.\n\nRecord collections are paginated with the `page` and `limit` query parameters\nand wrapped as `{ items, total, page, limit, totalPages }`. A few catalogue\nendpoints (`/plans`, `/subscription/usage`, roles, role templates, members, team\nmembers and time-complexity variance) answer with a plain JSON array instead.\n\nEvery response body is JSON, errors included: an error carries a `statusCode`,\nan `error` name, a `path` and a `message` that is a single string for business\nerrors and a string array when several fields failed validation.",
     "version": "1.0"
   },
   "tags": [
@@ -6913,7 +7884,7 @@
           "isVerified": {
             "type": "boolean",
             "example": true,
-            "description": "Whether the email has been verified. Example reflects the recorded state of someone@gmail.com, which is verified in this system."
+            "description": "Whether the email address has been confirmed. False right after registration, true after GET /auth/verify-email."
           },
           "createdAt": {
             "format": "date-time",
@@ -7022,6 +7993,55 @@
           "password"
         ]
       },
+      "ErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "statusCode": {
+            "type": "number",
+            "example": 400,
+            "description": "HTTP status code"
+          },
+          "message": {
+            "oneOf": [
+              {
+                "type": "string",
+                "example": "Validation failed"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "example": [
+                  "name should not be empty",
+                  "email must be an email"
+                ]
+              }
+            ],
+            "description": "Human readable summary: one string, or one string per invalid field"
+          },
+          "error": {
+            "type": "string",
+            "example": "Bad Request Exception",
+            "description": "Exception class name"
+          },
+          "timestamp": {
+            "type": "string",
+            "example": "2026-09-30T22:00:00.000Z",
+            "description": "Timestamp of the failed request"
+          },
+          "path": {
+            "type": "string",
+            "example": "/clients",
+            "description": "Request path"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error"
+        ]
+      },
       "UpdateProfileDto": {
         "type": "object",
         "properties": {
@@ -7102,40 +8122,6 @@
           "maxStorageGb",
           "maxOrganizations",
           "price"
-        ]
-      },
-      "ErrorResponseDto": {
-        "type": "object",
-        "properties": {
-          "statusCode": {
-            "type": "number",
-            "example": "Validation failed",
-            "description": "Human readable error summary"
-          },
-          "message": {
-            "type": "object",
-            "example": "Bad Request",
-            "description": "HTTP status message"
-          },
-          "error": {
-            "type": "string",
-            "example": "Bad Request Exception",
-            "description": "Exception name"
-          },
-          "timestamp": {
-            "type": "string",
-            "example": "2026-09-30T22:00:00.000Z",
-            "description": "Timestamp of the failed request"
-          },
-          "path": {
-            "type": "string",
-            "example": "/clients"
-          }
-        },
-        "required": [
-          "statusCode",
-          "message",
-          "error"
         ]
       },
       "SelectPlanDto": {

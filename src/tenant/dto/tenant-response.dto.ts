@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PlanResponseDto } from '../../plan/dto/plan-response.dto.js';
+import { PLAN_LIMIT_RESOURCES, TENANT_STATUSES } from '../../common/enums.js';
 
 export class TenantResponseDto {
   @ApiProperty({ example: '4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b' })
@@ -17,10 +18,7 @@ export class TenantResponseDto {
   @ApiPropertyOptional({ type: PlanResponseDto, nullable: true })
   plan: PlanResponseDto | null;
 
-  @ApiProperty({
-    enum: ['trial', 'active', 'cancelled', 'suspended'],
-    example: 'active',
-  })
+  @ApiProperty({ enum: TENANT_STATUSES, example: 'active' })
   status: string;
 
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
@@ -32,7 +30,7 @@ export class TenantResponseDto {
 
 export class PlanUsageDto {
   @ApiProperty({
-    enum: ['organizations', 'users', 'projects'],
+    enum: PLAN_LIMIT_RESOURCES,
     example: 'organizations',
     description: 'Limited resource',
   })

@@ -32,7 +32,7 @@ describe('MailService', () => {
       get: jest.fn((key: string) => {
         switch (key) {
           case 'EMAIL_FROM':
-            return 'ops-app <onboarding@resend.dev>';
+            return 'no-reply@example.com';
 
           case 'APP_BASE_URL':
             return 'http://localhost:3000';
@@ -85,7 +85,7 @@ describe('MailService', () => {
 
     expect(payload.to).toBe('user@example.com');
 
-    expect(payload.from).toBe('ops-app <onboarding@resend.dev>');
+    expect(payload.from).toBe('no-reply@example.com');
 
     expect(payload.subject).toBe('Verify your email');
 

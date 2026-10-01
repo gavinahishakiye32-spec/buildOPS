@@ -47,12 +47,13 @@ const DESCRIPTION = [
   'verified on every call and the permissions of your role decide what is allowed.',
   '',
   'Record collections are paginated with the `page` and `limit` query parameters',
-  'and wrapped as `{ items, total, page, limit }`. A few catalogue endpoints',
-  '(`/plans`, `/subscription/usage`, roles, role templates, members, team members',
-  'and time-complexity variance) answer with a plain JSON array instead.',
+  'and wrapped as `{ items, total, page, limit, totalPages }`. A few catalogue',
+  'endpoints (`/plans`, `/subscription/usage`, roles, role templates, members, team',
+  'members and time-complexity variance) answer with a plain JSON array instead.',
   '',
-  'Every response body is JSON, errors included: errors carry a `statusCode`, a',
-  '`message` and a `path`, and list `error` when several fields are invalid.',
+  'Every response body is JSON, errors included: an error carries a `statusCode`,',
+  'an `error` name, a `path` and a `message` that is a single string for business',
+  'errors and a string array when several fields failed validation.',
 ].join('\n');
 
 export function setupSwagger(app: INestApplication): void {
@@ -75,7 +76,12 @@ export function setupSwagger(app: INestApplication): void {
     'bearer',
   );
 
-  const document = SwaggerModule.createDocument(app, config.build());
+  // `ignoreGlobalPrefix` keeps the paths relative to the server URL above. The
+  // default would bake `api/v1` into every path *and* into the server URL, so
+  // "Try it out" and generated clients would request `/api/v1/api/v1/...`.
+  const document = SwaggerModule.createDocument(app, config.build(), {
+    ignoreGlobalPrefix: true,
+  });
 
   // The builder always emits an empty contact object; drop it instead of
   // shipping a meaningless one in the document.
