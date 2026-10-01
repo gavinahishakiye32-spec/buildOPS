@@ -14,9 +14,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { Auth } from '../common/decorators/auth.decorator.js';
+import { Auth, SkipOrganization } from '../common/decorators/auth.decorator.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
-import { SkipOrganization } from '../common/decorators/auth.decorators.js';
 import { Protected } from '../common/decorators/protected.decorator.js';
 import type { AuthContext } from '../common/types.js';
 import { TenantService } from './tenant.service.js';
