@@ -1,6 +1,7 @@
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import helmet from 'helmet';
+import { ORGANIZATION_HEADER } from './common/types.js';
 
 /**
  * Global route prefix. Every endpoint the frontend calls lives under this path,
@@ -51,7 +52,10 @@ export function configureApp(app: INestApplication): INestApplication {
     // cookie-based refresh tokens are introduced.
     credentials: false,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // `x-organization-id` is not a CORS-safelisted request header, so it has to
+    // be allow-listed explicitly: browsers preflight any request carrying it and
+    // reject the call when it is missing from this list.
+    allowedHeaders: ['Content-Type', 'Authorization', ORGANIZATION_HEADER],
     exposedHeaders: ['Content-Type'],
     maxAge: 86400,
   });
