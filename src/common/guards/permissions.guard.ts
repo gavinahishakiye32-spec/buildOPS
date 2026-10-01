@@ -12,7 +12,7 @@ import {
   IS_PUBLIC_KEY,
   REQUIRED_PERMISSIONS_KEY,
   SKIP_ORGANIZATION_KEY,
-} from '../decorators/auth.decorators.js';
+} from '../decorators/auth.decorator.js';
 import { MembershipResolver } from '../membership.js';
 import {
   ORGANIZATION_HEADER,
