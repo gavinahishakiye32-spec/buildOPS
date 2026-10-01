@@ -3,6 +3,12 @@ import type { INestApplication } from '@nestjs/common';
 import helmet from 'helmet';
 
 /**
+ * Global route prefix. Every endpoint the frontend calls lives under this path,
+ * which leaves room for a future `/api/v2` without breaking existing clients.
+ */
+export const API_PREFIX = 'api/v1';
+
+/**
  * Resolve the CORS allow-list.
  *
  * Defaults to permitting any origin so a frontend on any host (Vite dev
@@ -36,6 +42,7 @@ export function resolveAllowedOrigins(): string[] | true {
 export function configureApp(app: INestApplication): INestApplication {
   const origins = resolveAllowedOrigins();
 
+  app.setGlobalPrefix(API_PREFIX);
   app.use(helmet());
   app.enableCors({
     origin: origins,

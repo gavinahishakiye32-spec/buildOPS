@@ -138,7 +138,9 @@ describe('OpenAPI document (e2e)', () => {
     setupSwagger(app);
     await app.init();
 
-    const response = await request(app.getHttpServer()).get('/api-json').expect(200);
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/docs-json')
+      .expect(200);
     document = response.body as OpenApiDocument;
   });
 

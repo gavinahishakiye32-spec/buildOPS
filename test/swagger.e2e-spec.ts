@@ -409,9 +409,9 @@ describe('Swagger documentation (e2e)', () => {
   });
 
   describe('OpenAPI document', () => {
-    it('exposes the document as JSON on /api-json', async () => {
+    it('exposes the document as JSON on /api/v1/docs-json', async () => {
       const res = await request(server)
-        .get('/api-json')
+        .get('/api/v1/docs-json')
         .expect(200);
 
       const doc = res.body as OpenApiDocument;
@@ -427,13 +427,13 @@ describe('Swagger documentation (e2e)', () => {
 
     it('does not expose the document as YAML', async () => {
       await request(server)
-        .get('/api-yaml')
+        .get('/api/v1/docs-yaml')
         .expect(404);
     });
 
     it('documents every auth endpoint', async () => {
       const res = await request(server)
-        .get('/api-json')
+        .get('/api/v1/docs-json')
         .expect(200);
 
       const doc = res.body as OpenApiDocument;
@@ -447,7 +447,7 @@ describe('Swagger documentation (e2e)', () => {
 
     it('documents the exact status codes each endpoint returns', async () => {
       const res = await request(server)
-        .get('/api-json')
+        .get('/api/v1/docs-json')
         .expect(200);
 
       const doc = res.body as OpenApiDocument;
@@ -468,7 +468,7 @@ describe('Swagger documentation (e2e)', () => {
 
     it('documents request payloads and response schemas', async () => {
       const res = await request(server)
-        .get('/api-json')
+        .get('/api/v1/docs-json')
         .expect(200);
 
       const doc = res.body as OpenApiDocument;
