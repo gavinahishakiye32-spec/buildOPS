@@ -102,7 +102,7 @@ describe('MailService', () => {
     expect(payload.subject).toBe('Verify your email');
 
     expect(payload.html).toContain(
-      'http://localhost:3000/auth/verify-email?token=token-abc',
+      'http://localhost:3000/api/v1/auth/verify-email?token=token-abc',
     );
 
     expect(payload.html).toContain('Verify your email');
@@ -127,7 +127,7 @@ describe('MailService', () => {
     expect(payload.subject).toBe('Reset your password');
 
     expect(payload.html).toContain(
-      'http://localhost:3000/auth/reset-password?token=token-abc',
+      'http://localhost:3000/api/v1/auth/reset-password?token=token-abc',
     );
   });
 
