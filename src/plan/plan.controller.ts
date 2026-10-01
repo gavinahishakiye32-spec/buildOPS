@@ -14,7 +14,11 @@ export class PlanController {
     description:
       'Public catalogue of subscription plans and their capacity limits (max_users, max_projects, max_storage_gb, max_organizations, price).',
   })
-  @ApiResponse({ status: 200, description: 'Available plans', type: [PlanResponseDto] })
+  @ApiResponse({
+    status: 200,
+    description: 'Available plans',
+    type: [PlanResponseDto],
+  })
   async findAll(): Promise<PlanResponseDto[]> {
     const plans = await this.planService.findAll();
     return plans.map((plan) => plan.toResponse());

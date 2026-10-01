@@ -130,7 +130,9 @@ export class TenantController {
     type: SubscriptionMessageResponseDto,
   })
   @ApiErrors(404)
-  async cancel(@Auth() auth: AuthContext): Promise<SubscriptionMessageResponseDto> {
+  async cancel(
+    @Auth() auth: AuthContext,
+  ): Promise<SubscriptionMessageResponseDto> {
     const tenant = await this.tenantService.requireForUser(auth.userId);
     await this.tenantService.cancel(tenant);
 

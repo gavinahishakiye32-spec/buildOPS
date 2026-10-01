@@ -1,4 +1,3 @@
-
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
@@ -23,16 +22,9 @@ export class MailService {
 
   private createTransport(): Transporter {
     return nodemailer.createTransport({
-      host: this.config.get<string>(
-        'SMTP_HOST',
-        'smtp.gmail.com',
-      ),
-      port: Number(
-        this.config.get<string>('SMTP_PORT', '465'),
-      ),
-      secure:
-        this.config.get<string>('SMTP_SECURE', 'true') ===
-        'true',
+      host: this.config.get<string>('SMTP_HOST', 'smtp.gmail.com'),
+      port: Number(this.config.get<string>('SMTP_PORT', '465')),
+      secure: this.config.get<string>('SMTP_SECURE', 'true') === 'true',
       auth: {
         user: this.config.get<string>('SMTP_USER'),
         pass: this.config.get<string>('SMTP_PASSWORD'),
@@ -40,10 +32,7 @@ export class MailService {
     });
   }
 
-  async sendVerificationEmail(
-    email: string,
-    token: string,
-  ): Promise<void> {
+  async sendVerificationEmail(email: string, token: string): Promise<void> {
     const link = `${this.baseUrl}/${API_PREFIX}/auth/verify-email?token=${token}`;
 
     await this.send({
@@ -56,10 +45,7 @@ export class MailService {
     });
   }
 
-  async sendResetPasswordEmail(
-    email: string,
-    token: string,
-  ): Promise<void> {
+  async sendResetPasswordEmail(email: string, token: string): Promise<void> {
     const link = `${this.baseUrl}/${API_PREFIX}/auth/reset-password?token=${token}`;
 
     await this.send({
@@ -73,17 +59,10 @@ export class MailService {
   }
 
   private get baseUrl(): string {
-    return this.config.get<string>(
-      'APP_BASE_URL',
-      'http://localhost:3000',
-    );
+    return this.config.get<string>('APP_BASE_URL', 'http://localhost:3000');
   }
 
-  private async send({
-    to,
-    subject,
-    html,
-  }: SendEmailInput): Promise<void> {
+  private async send({ to, subject, html }: SendEmailInput): Promise<void> {
     try {
       await this.transporter.sendMail({
         from: this.from,
@@ -92,22 +71,15 @@ export class MailService {
         html,
       });
 
-      this.logger.log(
-        `Email sent to=${to} subject="${subject}"`,
-      );
+      this.logger.log(`Email sent to=${to} subject="${subject}"`);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : String(error);
+      const message = error instanceof Error ? error.message : String(error);
 
       this.logger.error(
         `Failed to send email to=${to} subject="${subject}": ${message}`,
       );
 
-      throw new Error(
-        `Failed to send email: ${message}`,
-      );
+      throw new Error(`Failed to send email: ${message}`);
     }
   }
 
@@ -255,5 +227,3 @@ export class MailService {
 </html>`;
   }
 }
-
-

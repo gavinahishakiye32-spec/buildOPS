@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, SelectQueryBuilder } from 'typeorm';
-import {
-  parseIntervalSeconds,
-  secondsToInterval,
-} from '../common/duration.js';
+import { parseIntervalSeconds, secondsToInterval } from '../common/duration.js';
 import {
   resolvePage,
   toPaginated,
@@ -184,8 +181,7 @@ export class TimeComplexityService {
     for (const entry of entries) {
       actualBySubtask.set(
         entry.subtaskId,
-        (actualBySubtask.get(entry.subtaskId) ?? 0) +
-          entry.durationSeconds(),
+        (actualBySubtask.get(entry.subtaskId) ?? 0) + entry.durationSeconds(),
       );
     }
 

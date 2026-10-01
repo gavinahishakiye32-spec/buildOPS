@@ -216,7 +216,8 @@ export class TaskController {
   @RequirePermissions(PERMISSIONS.SUBTASK_UPDATE)
   @ApiOperation({
     summary: 'Update a subtask',
-    description: 'Updates fields and reassigns the subtask to another team member.',
+    description:
+      'Updates fields and reassigns the subtask to another team member.',
   })
   @ApiResponse({ status: 200, type: SubtaskResponseDto })
   @ApiErrors(400, 403, 404)

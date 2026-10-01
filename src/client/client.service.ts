@@ -51,10 +51,7 @@ export class ClientService {
     return client;
   }
 
-  async create(
-    organizationId: string,
-    dto: CreateClientDto,
-  ): Promise<Client> {
+  async create(organizationId: string, dto: CreateClientDto): Promise<Client> {
     const email = dto.email ? normalizeEmail(dto.email) : null;
 
     if (email) {

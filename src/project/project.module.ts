@@ -11,7 +11,10 @@ import { AuthModule } from '../auth/auth.module.js';
 @Module({
   imports: [
     AuthModule,
-    AuthorizationModule,TypeOrmModule.forFeature([Project, Client]), TenantModule],
+    AuthorizationModule,
+    TypeOrmModule.forFeature([Project, Client]),
+    TenantModule,
+  ],
   controllers: [ProjectController],
   providers: [ProjectService],
   exports: [ProjectService, TypeOrmModule],

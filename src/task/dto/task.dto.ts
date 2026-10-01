@@ -39,7 +39,8 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
-    description: 'Optional badge of the same organization (classification, spec §10)',
+    description:
+      'Optional badge of the same organization (classification, spec §10)',
   })
   @IsOptional()
   @IsUUID()
@@ -55,7 +56,10 @@ export class CreateTaskDto {
   @IsIn(TASK_STATUSES)
   status?: string;
 
-  @ApiPropertyOptional({ example: '2026-11-01', description: 'Due date (DATE)' })
+  @ApiPropertyOptional({
+    example: '2026-11-01',
+    description: 'Due date (DATE)',
+  })
   @IsOptional()
   @IsDateString()
   dueDate?: string;
@@ -82,7 +86,8 @@ export class UpdateTaskDto {
 
   @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
-    description: 'Badge of the same organization (null clears the classification)',
+    description:
+      'Badge of the same organization (null clears the classification)',
   })
   @IsOptional()
   badgeId?: string | null;
@@ -109,7 +114,10 @@ export class TaskQueryDto extends PaginationQueryDto {
   @IsIn(TASK_STATUSES)
   status?: string;
 
-  @ApiPropertyOptional({ enum: TASK_PRIORITIES, description: 'Filter by priority' })
+  @ApiPropertyOptional({
+    enum: TASK_PRIORITIES,
+    description: 'Filter by priority',
+  })
   @IsOptional()
   @IsIn(TASK_PRIORITIES)
   priority?: string;

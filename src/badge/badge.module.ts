@@ -7,9 +7,7 @@ import { AuthorizationModule } from '../auth/authorization.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  imports: [
-    AuthModule,
-    AuthorizationModule,TypeOrmModule.forFeature([Badge])],
+  imports: [AuthModule, AuthorizationModule, TypeOrmModule.forFeature([Badge])],
   controllers: [BadgeController],
   providers: [BadgeService],
   exports: [BadgeService, TypeOrmModule],

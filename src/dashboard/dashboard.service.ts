@@ -79,7 +79,9 @@ export class DashboardService {
       (sum, value) => sum + value,
       0,
     );
-    const completedTasks = tasks.filter((task) => task.status === 'done').length;
+    const completedTasks = tasks.filter(
+      (task) => task.status === 'done',
+    ).length;
 
     return {
       from: snapshot.range.from.toISOString(),
@@ -92,10 +94,7 @@ export class DashboardService {
       tasksByStatus: countBy(tasks, (task) => task.status),
       subtasksByStatus: countBy(subtasks, (subtask) => subtask.status),
       tasksByPriority: countBy(tasks, (task) => task.priority),
-      timeByGroup: await this.timeByGroup(
-        snapshot,
-        query.groupBy ?? 'user',
-      ),
+      timeByGroup: await this.timeByGroup(snapshot, query.groupBy ?? 'user'),
       variance: await this.varianceSummary(snapshot),
       completionRate: tasks.length ? round2(completedTasks / tasks.length) : 0,
       averageSecondsPerEntry: entries.length
@@ -119,7 +118,9 @@ export class DashboardService {
         taskIds.has(subtask.taskId),
       );
       const subtaskIds = new Set(subtasks.map((subtask) => subtask.id));
-      const completedTasks = tasks.filter((task) => task.status === 'done').length;
+      const completedTasks = tasks.filter(
+        (task) => task.status === 'done',
+      ).length;
       const completedSubtasks = subtasks.filter(
         (subtask) => subtask.status === 'done',
       ).length;
@@ -135,7 +136,8 @@ export class DashboardService {
         completionRate:
           tasks.length > 0 ? round2(completedTasks / tasks.length) : null,
         totalSeconds: [...subtaskIds].reduce(
-          (sum, subtaskId) => sum + (snapshot.secondsBySubtask.get(subtaskId) ?? 0),
+          (sum, subtaskId) =>
+            sum + (snapshot.secondsBySubtask.get(subtaskId) ?? 0),
           0,
         ),
         startDate: toDateOnly(project.startDate),
@@ -179,7 +181,8 @@ export class DashboardService {
         status: client.status,
         projects: clientProjects.length,
         totalSeconds: [...clientSubtaskIds].reduce(
-          (sum, subtaskId) => sum + (snapshot.secondsBySubtask.get(subtaskId) ?? 0),
+          (sum, subtaskId) =>
+            sum + (snapshot.secondsBySubtask.get(subtaskId) ?? 0),
           0,
         ),
       };
@@ -337,9 +340,13 @@ export class DashboardService {
       const users = await this.userRepo.find({
         where: { id: In(entries.map((entry) => entry.userId)) },
       });
-      const labels = new Map(users.map((user) => [user.id, user.name ?? user.id]));
-      return groupEntries(entries, (entry) => entry.userId, (key) =>
-        labels.get(key) ?? null,
+      const labels = new Map(
+        users.map((user) => [user.id, user.name ?? user.id]),
+      );
+      return groupEntries(
+        entries,
+        (entry) => entry.userId,
+        (key) => labels.get(key) ?? null,
       );
     }
 
@@ -413,7 +420,9 @@ export class DashboardService {
     return snapshot.tasks.find((task) => task.id === subtask.taskId) ?? null;
   }
 
-  private async varianceSummary(snapshot: Snapshot): Promise<VarianceSummaryDto> {
+  private async varianceSummary(
+    snapshot: Snapshot,
+  ): Promise<VarianceSummaryDto> {
     const { tasks, subtasks } = snapshot;
 
     if (tasks.length === 0 || subtasks.length === 0) {

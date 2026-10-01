@@ -23,7 +23,10 @@ import {
   Protected,
   RequirePermissions,
 } from '../common/decorators/protected.decorator.js';
-import { PaginationQueryDto, type Paginated } from '../common/pagination.dto.js';
+import {
+  PaginationQueryDto,
+  type Paginated,
+} from '../common/pagination.dto.js';
 import { ClientService } from './client.service.js';
 import {
   ClientMessageResponseDto,

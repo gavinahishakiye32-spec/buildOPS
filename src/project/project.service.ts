@@ -73,9 +73,8 @@ export class ProjectService {
     organizationId: string,
     dto: CreateProjectDto,
   ): Promise<Project> {
-    const tenant = await this.tenantService.requireByOrganizationId(
-      organizationId,
-    );
+    const tenant =
+      await this.tenantService.requireByOrganizationId(organizationId);
     await this.tenantService.assertCanConsume(tenant, 'projects');
 
     const clientId = await this.resolveClient(organizationId, dto.clientId);
@@ -151,9 +150,7 @@ export class ProjectService {
     });
 
     if (!client) {
-      throw new NotFoundException(
-        'Client not found in this organization',
-      );
+      throw new NotFoundException('Client not found in this organization');
     }
 
     return client.id;

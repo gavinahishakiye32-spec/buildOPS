@@ -95,10 +95,7 @@ export class RoleService extends MembershipResolver {
       }));
   }
 
-  async addMember(
-    organizationId: string,
-    dto: AddMemberDto,
-  ): Promise<Role> {
+  async addMember(organizationId: string, dto: AddMemberDto): Promise<Role> {
     if (!dto.userId && !dto.email) {
       throw new BadRequestException('userId or email is required');
     }
@@ -325,7 +322,10 @@ export class RoleService extends MembershipResolver {
       }),
     );
 
-    await this.replacePermissionRows(role, this.validatePermissions(input.permissions));
+    await this.replacePermissionRows(
+      role,
+      this.validatePermissions(input.permissions),
+    );
     await this.syncUserOrganization(input.userId, organizationId);
 
     return this.findRole(organizationId, role.id);
