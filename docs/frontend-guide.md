@@ -15,16 +15,38 @@ generated OpenAPI document (see [Live spec](#1-live-spec)).
 | --- | --- |
 | Base URL (local) | `http://localhost:3000/api/v1` |
 | Swagger UI | `http://localhost:3000/api/v1/docs` |
-| OpenAPI JSON | `http://localhost:3000/api/v1/docs-json` |
+| OpenAPI JSON (live) | `http://localhost:3000/api/v1/docs-json` |
+| OpenAPI JSON (committed) | `docs/openapi.json` |
 | Liveness probe | `GET /api/v1/` → `Hello World!` |
 
 Every route below lives under the global prefix `api/v1` — include it in your
 `baseURL` so you never hard-code it in a path. `PORT` overrides `3000`.
 
-There are **83 endpoints** across 12 resources. Do not hand-maintain a client from
-this document: generate types from `docs-json` (openapi-typescript, Orval,
-`swagger-typescript-api`) and use the tables here for behaviour that the schema
-cannot express.
+There are **83 endpoints** in 13 tag groups. Do not hand-maintain a client from
+this document: generate types from `docs/openapi.json` (openapi-typescript,
+Orval, `swagger-typescript-api`) and use the tables here for behaviour that the
+schema cannot express. The committed file is a byte-for-byte copy of what the
+server serves at `docs-json`, so type generation works offline and in CI without
+starting the API.
+
+### Keeping the spec in sync
+
+`docs/openapi.json` is generated from the decorators on the controllers and DTOs,
+never edited by hand:
+
+```
+npm run docs:openapi   # rewrites docs/openapi.json
+npm run test:e2e       # fails if the committed file is stale
+```
+
+`test/openapi-artifact.e2e-spec.ts` regenerates the document in memory and
+compares it with the committed file, so a new endpoint, a changed DTO or a
+missing `@ApiResponse` that is not followed by `npm run docs:openapi` fails the
+e2e run. It also asserts the document itself is complete: a 3.x version, a server
+URL carrying the prefix, a description for every tag, and an `operationId`,
+`summary` and `description` on all 83 operations. `test/openapi.e2e-spec.ts`
+covers the rest — the exhaustive route table, success codes, the bearer scheme
+and `$ref` integrity.
 
 ---
 
@@ -805,7 +827,7 @@ tasks, and `0` on `/dashboard/overview` when the organization has no tasks.
 - [ ] Pagination reads `totalPages` and clamps `limit ≤ 100`
 - [ ] Timesheet screens hidden without `time_entry.view_all`
 - [ ] `429` handled with backoff, no automatic retry storm
-- [ ] Types generated from `/api/v1/docs-json` rather than hand-written
+- [ ] Types generated from `docs/openapi.json` rather than hand-written
 
 ## 12. Known limitations
 
@@ -832,4 +854,5 @@ discovering them in QA:
 7. **`?userId` on time entries is ignored without `view_all`** — a silent
    filter, not a `403`.
 8. **Swagger docs, not this file, are the schema source of truth.** If the two
-   ever disagree, the generated OpenAPI document and the running server win.
+   ever disagree, `docs/openapi.json` and the running server win. Regenerate the
+   file with `npm run docs:openapi` whenever a controller or DTO changes.
