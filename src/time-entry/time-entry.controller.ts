@@ -168,7 +168,11 @@ export class TimeEntryController {
   @Get(':timeEntryId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TIME_ENTRY_VIEW)
-  @ApiOperation({ summary: 'Get a time entry' })
+  @ApiOperation({
+    summary: 'Get a time entry',
+    description:
+      'One time entry of the active organization. isRunning is true while the timer keeps counting and durationSeconds is live until it stops.',
+  })
   @ApiResponse({ status: 200, type: TimeEntryResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -213,7 +217,11 @@ export class TimeEntryController {
   @HttpCode(200)
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TIME_ENTRY_DELETE)
-  @ApiOperation({ summary: 'Delete a time entry' })
+  @ApiOperation({
+    summary: 'Delete a time entry',
+    description:
+      'Deletes a time entry of the active organization. Only the user who logged it can delete it; other members get a 404.',
+  })
   @ApiResponse({ status: 200, type: TimeEntryMessageResponseDto })
   @ApiErrors(403, 404)
   async remove(
