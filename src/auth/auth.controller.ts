@@ -5,24 +5,17 @@ import {
   Patch,
   Body,
   Query,
-  UseGuards,
   Request,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiQuery,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
-import { JwtAuthGuard } from './jwt-auth.guard.js';
+import { BearerProfile } from '../common/decorators/protected.decorator.js';
 import {
   RegisterResponseDto,
   LoginResponseDto,
@@ -81,7 +74,7 @@ export class AuthController {
     name: 'token',
     required: true,
     description:
-      'Verification token received by email (printed to the server console)',
+      'Verification token received by email. The frontend should read `?token=` and call this endpoint.',
   })
   @ApiResponse({
     status: 200,
@@ -128,8 +121,7 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @BearerProfile()
   @Get('profile')
   @ApiOperation({
     summary: 'Get current user profile',
@@ -140,13 +132,11 @@ export class AuthController {
     description: 'Current user profile',
     type: UserResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Missing or invalid token' })
   getProfile(@Request() req: { user: { id: string } }) {
     return this.authService.getProfile(req.user.id);
   }
 
-  @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @BearerProfile()
   @Patch('profile')
   @ApiOperation({
     summary: 'Update current user profile',
@@ -162,7 +152,6 @@ export class AuthController {
     status: 400,
     description: 'Invalid profile update or current password',
   })
-  @ApiResponse({ status: 401, description: 'Missing or invalid token' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   updateProfile(
     @Request() req: { user: { id: string } },

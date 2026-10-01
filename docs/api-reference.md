@@ -21,7 +21,7 @@ handling, client patterns) see [frontend-guide.md](frontend-guide.md).
 - **Organization** — organization-scoped routes need an active organization: send `x-organization-id`, or call the `/organizations/{organizationId}` form, which takes precedence when both are present. Your membership is verified on every call.
 - **Permission** — the permission(s) a route requires. Granted through your role in that organization; a missing one returns `403`.
 - **Pagination** — `page` (1-based) and `limit` (default 20, max 100) in the query, answered as `{ items, total, page, limit, totalPages }`.
-- **Errors** — `{ statusCode, message, path }`, plus `error: string[]` when several fields are invalid. `message` is a string or an array of strings.
+- **Errors** — `{ statusCode, error, message, timestamp, path }`, where `message` is a string for business errors and a string array when several fields failed validation.
 - **PATCH** — send only the fields to change; omitted fields are untouched. Unknown fields are rejected with `400`.
 - **DELETE** — answers `200` with a `{ message }` body.
 - **Timestamps** — ISO 8601 UTC strings.

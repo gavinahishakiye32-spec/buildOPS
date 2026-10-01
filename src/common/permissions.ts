@@ -62,12 +62,14 @@ const viewOnly = (resource: string): PermissionName[] => [
   `${resource}.view` as PermissionName,
 ];
 
-export const DEFAULT_ROLE_TEMPLATES: {
+export interface RoleTemplate {
   key: string;
   name: string;
   description: string;
   permissions: PermissionName[];
-}[] = [
+}
+
+export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
   {
     key: 'owner',
     name: 'Owner',
@@ -184,3 +186,8 @@ export const DEFAULT_ROLE_TEMPLATES: {
 export function isPermissionName(value: string): value is PermissionName {
   return (ALL_PERMISSIONS as string[]).includes(value);
 }
+
+/** Keys of {@link DEFAULT_ROLE_TEMPLATES}, for the Swagger enum of `templateKey`. */
+export const ROLE_TEMPLATE_KEYS: string[] = DEFAULT_ROLE_TEMPLATES.map(
+  (template) => template.key,
+);

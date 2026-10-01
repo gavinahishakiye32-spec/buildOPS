@@ -9,7 +9,6 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { PermissionName } from '../permissions.js';
 import {
-  IS_PUBLIC_KEY,
   REQUIRED_PERMISSIONS_KEY,
   SKIP_ORGANIZATION_KEY,
 } from '../decorators/auth.decorator.js';
@@ -38,15 +37,6 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-
-    if (isPublic) {
-      return true;
-    }
-
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
 
     const authContext: AuthContext = {

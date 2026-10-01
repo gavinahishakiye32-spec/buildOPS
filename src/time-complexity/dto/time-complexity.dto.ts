@@ -5,8 +5,10 @@ import { PaginationQueryDto } from '../../common/pagination.dto.js';
 import {
   TIME_COMPLEXITY_NAMES,
   TIME_COMPLEXITY_STATUSES,
+  TIME_COMPLEXITY_VARIANCES,
 } from '../../common/enums.js';
 
+/** Upper bound on a stored duration: one year, in seconds. */
 const MAX_SECONDS = 86400 * 365;
 
 const DURATION_PATTERN =
@@ -218,10 +220,8 @@ export class VarianceRowDto {
   @ApiProperty({
     example: 'within',
     nullable: true,
-    enum: ['within', 'under', 'over'],
+    enum: TIME_COMPLEXITY_VARIANCES,
     description: 'Actual duration relative to the envelope',
   })
   variance: string | null;
 }
-
-export const MAX_DURATION_SECONDS = MAX_SECONDS;

@@ -16,10 +16,13 @@ import { LoginDto } from './dto/login.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import {
+  SELF_EDITABLE_USER_STATUSES,
+  isSelfEditableStatus,
+} from '../common/enums.js';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
-const ALLOWED_PROFILE_STATUSES = ['active', 'inactive'] as const;
 
 @Injectable()
 export class AuthService {
@@ -128,13 +131,11 @@ export class AuthService {
     }
 
     if (hasStatus) {
-      if (
-        !ALLOWED_PROFILE_STATUSES.includes(
-          status as (typeof ALLOWED_PROFILE_STATUSES)[number],
-        )
-      ) {
+      // The DTO already validated this; the check stays so a non-HTTP caller
+      // (or a future admin route) cannot write a status outside the enum.
+      if (!isSelfEditableStatus(status)) {
         throw new BadRequestException(
-          `Invalid status. Allowed: ${ALLOWED_PROFILE_STATUSES.join(', ')}`,
+          `Invalid status. Allowed: ${SELF_EDITABLE_USER_STATUSES.join(', ')}`,
         );
       }
       fields.status = status;

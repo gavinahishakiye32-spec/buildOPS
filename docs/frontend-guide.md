@@ -17,6 +17,7 @@ generated OpenAPI document (see [Live spec](#1-live-spec)).
 | Swagger UI | `http://localhost:3000/api/v1/docs` |
 | OpenAPI JSON (live) | `http://localhost:3000/api/v1/docs-json` |
 | OpenAPI JSON (committed) | `docs/openapi.json` |
+| Endpoint reference | `docs/api-reference.md` |
 | Liveness probe | `GET /api/v1/` → `Hello World!` |
 
 Every route below lives under the global prefix `api/v1` — include it in your
@@ -31,22 +32,34 @@ starting the API.
 
 ### Keeping the spec in sync
 
-`docs/openapi.json` is generated from the decorators on the controllers and DTOs,
-never edited by hand:
+Two files under `docs/` are generated from the decorators on the controllers and
+DTOs, and neither is edited by hand:
 
 ```
-npm run docs:openapi   # rewrites docs/openapi.json
-npm run test:e2e       # fails if the committed file is stale
+npm run docs:openapi     # rewrites docs/openapi.json, then docs/api-reference.md
+npm run docs:reference   # rewrites docs/api-reference.md only
+npm run test:e2e         # fails if either committed file is stale
 ```
+
+- **`docs/openapi.json`** — the machine-readable contract (3.0.0). Point your
+  type generator at it: `openapi-typescript docs/openapi.json`.
+- **`docs/api-reference.md`** — the same contract as prose: every route with its
+  auth requirement, organization rule, permissions, parameters, request body and
+  responses. Use it when you want to read a flow instead of a schema.
 
 `test/openapi-artifact.e2e-spec.ts` regenerates the document in memory and
-compares it with the committed file, so a new endpoint, a changed DTO or a
+compares it with both committed files, so a new endpoint, a changed DTO or a
 missing `@ApiResponse` that is not followed by `npm run docs:openapi` fails the
-e2e run. It also asserts the document itself is complete: a 3.x version, a server
-URL carrying the prefix, a description for every tag, and an `operationId`,
-`summary` and `description` on all 83 operations. `test/openapi.e2e-spec.ts`
-covers the rest — the exhaustive route table, success codes, the bearer scheme
-and `$ref` integrity.
+e2e run. It also asserts the document is complete (3.x, a server URL carrying the
+prefix, a description for every tag, an `operationId`/`summary`/`description` on
+all 83 operations) and that the access-control extensions agree with the bearer
+scheme. `test/openapi.e2e-spec.ts` covers the rest — the exhaustive route table,
+success codes, the bearer scheme and `$ref` integrity.
+
+Access control is published three times from one source, so it cannot drift:
+`security` (the standard field), `x-auth` / `x-organization-context` /
+`x-permissions` (written by the same decorators the guards read), and the prose
+in `api-reference.md`.
 
 ---
 

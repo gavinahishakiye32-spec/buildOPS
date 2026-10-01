@@ -14,14 +14,12 @@ import { Project } from '../project/project.entity.js';
 import { User } from '../user/user.entity.js';
 import { SelectPlanDto } from './dto/select-plan.dto.js';
 import type { PlanUsageDto } from './dto/tenant-response.dto.js';
+import { PLAN_LIMIT_RESOURCES } from '../common/enums.js';
 
-export type LimitResource = 'organizations' | 'users' | 'projects';
+/** Alias kept local: the service speaks in terms of a limitable resource. */
+type LimitResource = (typeof PLAN_LIMIT_RESOURCES)[number];
 
-export const LIMIT_RESOURCES: LimitResource[] = [
-  'organizations',
-  'users',
-  'projects',
-];
+const LIMIT_RESOURCES: readonly LimitResource[] = PLAN_LIMIT_RESOURCES;
 
 /**
  * Subscription state machine (spec §4.2): a tenant is created by subscribing to

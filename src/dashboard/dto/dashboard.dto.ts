@@ -275,24 +275,3 @@ export class DashboardOverdueDto {
   @ApiProperty({ type: [OverdueSubtaskDto] })
   items: OverdueSubtaskDto[];
 }
-
-export class BudgetUsageDto {
-  @ApiProperty({ example: '7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d' })
-  projectId: string;
-
-  @ApiProperty({ example: 'Website redesign' })
-  name: string;
-
-  @ApiProperty({ example: 12000, nullable: true, description: 'Budget' })
-  budget: number | null;
-
-  @ApiProperty({ example: 36000, description: 'Logged seconds' })
-  totalSeconds: number;
-
-  @ApiProperty({
-    example: null,
-    nullable: true,
-    description: 'Estimated cost if a cost per hour were known; null otherwise',
-  })
-  estimatedCost: number | null;
-}

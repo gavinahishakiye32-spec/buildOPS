@@ -10,8 +10,9 @@ import { AuthModule } from './auth.module.js';
  * modules import `AuthModule` (for `JwtAuthGuard`) and `AuthorizationModule`
  * (for `PermissionsGuard` and the membership resolver) used by `@Protected()`.
  *
- * `MembershipResolver` is re-bound here instead of re-exported from RoleModule
- * so the guard always resolves it from its own module context.
+ * `MembershipResolver` is provided here as well as in `RoleModule`: `RoleModule`
+ * would have to import this module to export it, which closes a cycle
+ * (RoleModule already imports AuthModule, and every feature module imports both).
  */
 @Module({
   imports: [AuthModule, RoleModule],

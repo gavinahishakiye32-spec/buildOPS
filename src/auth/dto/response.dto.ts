@@ -19,7 +19,7 @@ export class UserResponseDto {
   @ApiProperty({
     example: true,
     description:
-      'Whether the email has been verified. Example reflects the recorded state of someone@gmail.com, which is verified in this system.',
+      'Whether the email address has been confirmed. False right after registration, true after GET /auth/verify-email.',
   })
   isVerified: boolean;
 
@@ -42,6 +42,11 @@ export class RegisterResponseDto {
 }
 
 export class LoginResponseDto {
+  /**
+   * snake_case, unlike every other field in the API. Published this way from
+   * the start and documented in the frontend guide, so renaming it would be a
+   * breaking change for existing clients.
+   */
   @ApiProperty({
     example:
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNTAwMDAwMDAwLCJleHAiOjE1MDAwMDAwMDB9.example',

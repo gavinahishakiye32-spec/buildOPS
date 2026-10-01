@@ -1,13 +1,6 @@
 import { ApiExtraModels, ApiProperty } from '@nestjs/swagger';
 import type { Type } from '@nestjs/common';
-
-export interface Paginated<T> {
-  items: T[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+import type { Paginated } from '../pagination.dto.js';
 
 /**
  * Builds the OpenAPI schema of the shared pagination envelope for a concrete
