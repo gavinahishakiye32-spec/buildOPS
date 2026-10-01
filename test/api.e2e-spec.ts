@@ -273,7 +273,7 @@ describe('BuildOps operational flow (e2e)', () => {
 
       await asOwner(
         request(server).post(
-          `/organizations/${organizationId}/roles/${roleId}/assign`,
+          api(`/organizations/${organizationId}/roles/${roleId}/assign`),
         ),
       )
         .send({ userId: memberId })
@@ -286,7 +286,7 @@ describe('BuildOps operational flow (e2e)', () => {
 
       await asOwner(
         request(server).put(
-          `/organizations/${organizationId}/roles/${roleId}/permissions`,
+          api(`/organizations/${organizationId}/roles/${roleId}/permissions`),
         ),
       )
         .send({ permissions: ['client.view', 'client.create', 'task.view'] })
@@ -304,7 +304,7 @@ describe('BuildOps operational flow (e2e)', () => {
       // Back to a read-only role for the remaining assertions.
       await asOwner(
         request(server).put(
-          `/organizations/${organizationId}/roles/${roleId}/permissions`,
+          api(`/organizations/${organizationId}/roles/${roleId}/permissions`),
         ),
       )
         .send({ permissions: ['client.view', 'task.view'] })
