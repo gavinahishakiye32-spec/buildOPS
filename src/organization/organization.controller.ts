@@ -12,9 +12,8 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
-import { Auth } from '../common/decorators/auth.decorator.js';
+import { Auth, SkipOrganization } from '../common/decorators/auth.decorator.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
-import { SkipOrganization } from '../common/decorators/auth.decorators.js';
 import {
   OrganizationHeader,
   Protected,
