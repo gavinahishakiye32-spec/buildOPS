@@ -12,9 +12,9 @@ const TAGS: [name: string, description: string][] = [
   ['plans', 'Public catalogue of subscription plans and their capacity limits'],
   [
     'subscription',
-    'The tenant subscription of the authenticated user: plan, status and usage',
+    'The subscription of the authenticated user: plan, status and usage',
   ],
-  ['organizations', 'Organization CRUD within the tenant subscription'],
+  ['organizations', 'Organization CRUD within the subscription'],
   [
     'roles',
     'Role definitions, role assignments, members and the permission catalogue',
@@ -23,7 +23,11 @@ const TAGS: [name: string, description: string][] = [
   ['clients', 'CRM client records of the active organization'],
   ['projects', 'Projects, optionally attached to a client'],
   ['badges', 'Task classification badges'],
-  ['tasks', 'Tasks and their subtasks'],
+  ['tasks', 'Tasks of a project of the active organization'],
+  [
+    'subtasks',
+    'Subtasks of a task, assigned to individual members of its team',
+  ],
   ['time-entries', 'Manual time entries and the timer lifecycle'],
   [
     'time-complexity',

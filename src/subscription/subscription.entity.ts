@@ -10,8 +10,14 @@ import {
 import { User } from '../user/user.entity.js';
 import { Plan } from '../plan/plan.entity.js';
 
+/**
+ * The subscription row. The table stays named `tenants` (see `schema.sql`) even
+ * though the domain vocabulary is "subscription": it is referenced by
+ * `organizations.tenant_id`, which is left alone for the same reason. Changing
+ * either would be a database migration, not a rename.
+ */
 @Entity('tenants')
-export class Tenant {
+export class Subscription {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 

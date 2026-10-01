@@ -5,7 +5,7 @@ NestJS + TypeORM backend powering BuildOps (multi-tenant project/task/time track
 ## Features
 
 - JWT auth with email verification and password reset
-- Multi-tenant model: Tenant (subscription) → Organization → Users, Roles, Permissions
+- Multi-tenant model: Subscription → Organization → Users, Roles, Permissions
 - Resources: Clients, Projects, Teams, Badges, Tasks/Subtasks, Time Entries, Time Complexity, Dashboard
 - Global validation, CORS, Helmet, rate limiting
 - OpenAPI 3.0 (Swagger UI) + generated reference docs
@@ -31,7 +31,7 @@ See `.env.example` for all variables. Key ones: `DB_HOST/PORT/USER/PASS/NAME`, `
 
 ## Architecture
 
-Domain modules under `src/` (feature-first): `auth`, `tenant`, `organization`, `role`, `team`, `client`, `project`, `badge`, `task`, `subtask` (no standalone module/routes), `time-entry`, `time-complexity`, `dashboard`, `plan`, `user`, `mail`. 
+Domain modules under `src/` (feature-first): `auth`, `subscription`, `organization`, `role`, `team`, `client`, `project`, `badge`, `task`, `subtask`, `time-entry`, `time-complexity`, `dashboard`, `plan`, `user`, `mail`. 
 Global guards: `ThrottlerGuard` (rate limiting). Org-scoped routes require `x-organization-id` or `:organizationId` param via `@Protected()`, permissions via `@RequirePermissions(...)`.
 
 ## Commands

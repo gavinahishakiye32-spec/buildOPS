@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RoleModule } from '../role/role.module.js';
-import { TenantModule } from '../tenant/tenant.module.js';
+import { SubscriptionModule } from '../subscription/subscription.module.js';
 import { OrganizationController } from './organization.controller.js';
 import { Organization } from './organization.entity.js';
 import { OrganizationService } from './organization.service.js';
@@ -13,7 +13,7 @@ import { AuthModule } from '../auth/auth.module.js';
     AuthModule,
     AuthorizationModule,
     TypeOrmModule.forFeature([Organization]),
-    TenantModule,
+    SubscriptionModule,
     RoleModule,
   ],
   controllers: [OrganizationController],

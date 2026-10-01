@@ -6,7 +6,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Tenant } from '../tenant/tenant.entity.js';
+import { Subscription } from '../subscription/subscription.entity.js';
 
 @Entity('organizations')
 export class Organization {
@@ -16,9 +16,9 @@ export class Organization {
   @Column({ name: 'tenant_id', type: 'uuid' })
   tenantId: string;
 
-  @ManyToOne(() => Tenant, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Subscription, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'tenant_id' })
-  tenant: Tenant;
+  tenant: Subscription;
 
   @Column({ type: 'varchar', length: 255 })
   name: string;

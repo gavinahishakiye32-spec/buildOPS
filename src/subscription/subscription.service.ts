@@ -6,14 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Tenant } from './tenant.entity.js';
+import { Subscription } from './subscription.entity.js';
 import { Plan } from '../plan/plan.entity.js';
 import { PlanService } from '../plan/plan.service.js';
 import { Organization } from '../organization/organization.entity.js';
 import { Project } from '../project/project.entity.js';
 import { User } from '../user/user.entity.js';
 import { SelectPlanDto } from './dto/select-plan.dto.js';
-import type { PlanUsageDto } from './dto/tenant-response.dto.js';
+import type { PlanUsageDto } from './dto/subscription-response.dto.js';
 import { PLAN_LIMIT_RESOURCES } from '../common/enums.js';
 
 /** Alias kept local: the service speaks in terms of a limitable resource. */
@@ -22,15 +22,15 @@ type LimitResource = (typeof PLAN_LIMIT_RESOURCES)[number];
 const LIMIT_RESOURCES: readonly LimitResource[] = PLAN_LIMIT_RESOURCES;
 
 /**
- * Subscription state machine (spec §4.2): a tenant is created by subscribing to
+ * Subscription state machine (spec §4.2): a subscription is created by subscribing to
  * a plan, and every capacity-consuming operation funnels through
- * {@link TenantService.assertCanConsume} so plan limits stay centralized (spec §16).
+ * {@link SubscriptionService.assertCanConsume} so plan limits stay centralized (spec §16).
  */
 @Injectable()
-export class TenantService {
+export class SubscriptionService {
   constructor(
-    @InjectRepository(Tenant)
-    private readonly tenantRepo: Repository<Tenant>,
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepo: Repository<Subscription>,
     @InjectRepository(Organization)
     private readonly organizationRepo: Repository<Organization>,
     @InjectRepository(Project)
@@ -40,58 +40,60 @@ export class TenantService {
     private readonly planService: PlanService,
   ) {}
 
-  async findById(id: string): Promise<Tenant | null> {
-    return this.tenantRepo.findOne({
+  async findById(id: string): Promise<Subscription | null> {
+    return this.subscriptionRepo.findOne({
       where: { id },
       relations: { plan: true },
     });
   }
 
-  async findByUserId(userId: string): Promise<Tenant | null> {
-    return this.tenantRepo.findOne({
+  async findByUserId(userId: string): Promise<Subscription | null> {
+    return this.subscriptionRepo.findOne({
       where: { userId },
       relations: { plan: true },
     });
   }
 
   /** Resolves the subscription that owns an organization (spec §4.3). */
-  async findByOrganizationId(organizationId: string): Promise<Tenant | null> {
-    return this.tenantRepo
-      .createQueryBuilder('tenant')
-      .leftJoinAndSelect('tenant.plan', 'plan')
-      .innerJoin('organizations', 'org', 'org.tenant_id = tenant.id')
+  async findByOrganizationId(
+    organizationId: string,
+  ): Promise<Subscription | null> {
+    return this.subscriptionRepo
+      .createQueryBuilder('subscription')
+      .leftJoinAndSelect('subscription.plan', 'plan')
+      .innerJoin('organizations', 'org', 'org.tenant_id = subscription.id')
       .where('org.id = :organizationId', { organizationId })
       .getOne();
   }
 
   /** Same as {@link findByOrganizationId} but fails loudly for scoped services. */
-  async requireByOrganizationId(organizationId: string): Promise<Tenant> {
-    const tenant = await this.findByOrganizationId(organizationId);
+  async requireByOrganizationId(organizationId: string): Promise<Subscription> {
+    const subscription = await this.findByOrganizationId(organizationId);
 
-    if (!tenant) {
+    if (!subscription) {
       throw new NotFoundException(
         'The organization has no owning subscription',
       );
     }
 
-    return tenant;
+    return subscription;
   }
 
   /**
-   * Returns the tenant owned by the user. Registration does not create a tenant:
-   * subscription does (spec §4.2).
+   * Returns the subscription owned by the user. Registration does not create one:
+   * subscribing does (spec §4.2).
    */
-  async requireForUser(userId: string): Promise<Tenant> {
-    const tenant = await this.findByUserId(userId);
-    if (!tenant) {
+  async requireForUser(userId: string): Promise<Subscription> {
+    const subscription = await this.findByUserId(userId);
+    if (!subscription) {
       throw new NotFoundException(
         'No subscription found. Subscribe to a plan first.',
       );
     }
-    return tenant;
+    return subscription;
   }
 
-  async subscribe(userId: string, dto: SelectPlanDto): Promise<Tenant> {
+  async subscribe(userId: string, dto: SelectPlanDto): Promise<Subscription> {
     const plan = await this.planService.requireById(dto.planId);
 
     const existing = await this.findByUserId(userId);
@@ -107,43 +109,46 @@ export class TenantService {
     if (existing) {
       existing.planId = plan.id;
       existing.status = dto.status ?? 'active';
-      const reactivated = await this.tenantRepo.save(existing);
+      const reactivated = await this.subscriptionRepo.save(existing);
       reactivated.plan = plan;
       return reactivated;
     }
 
-    const tenant = this.tenantRepo.create({
+    const subscription = this.subscriptionRepo.create({
       userId,
       planId: plan.id,
       status: dto.status ?? 'active',
       plan,
     });
-    return this.tenantRepo.save(tenant);
+    return this.subscriptionRepo.save(subscription);
   }
 
-  async changePlan(tenant: Tenant, planId: string): Promise<Tenant> {
+  async changePlan(
+    subscription: Subscription,
+    planId: string,
+  ): Promise<Subscription> {
     const plan = await this.planService.requireById(planId);
 
-    if (tenant.planId === plan.id) {
-      tenant.plan = plan;
-      return tenant;
+    if (subscription.planId === plan.id) {
+      subscription.plan = plan;
+      return subscription;
     }
 
-    await this.assertDowngradeIsSafe(tenant, plan);
+    await this.assertDowngradeIsSafe(subscription, plan);
 
-    tenant.planId = plan.id;
-    tenant.plan = plan;
-    tenant.status = 'active';
-    return this.tenantRepo.save(tenant);
+    subscription.planId = plan.id;
+    subscription.plan = plan;
+    subscription.status = 'active';
+    return this.subscriptionRepo.save(subscription);
   }
 
-  async cancel(tenant: Tenant): Promise<Tenant> {
-    tenant.status = 'cancelled';
-    return this.tenantRepo.save(tenant);
+  async cancel(subscription: Subscription): Promise<Subscription> {
+    subscription.status = 'cancelled';
+    return this.subscriptionRepo.save(subscription);
   }
 
-  isUsable(tenant: Tenant): boolean {
-    return tenant.status === 'active' || tenant.status === 'trial';
+  isUsable(subscription: Subscription): boolean {
+    return subscription.status === 'active' || subscription.status === 'trial';
   }
 
   /**
@@ -152,34 +157,34 @@ export class TenantService {
    * across services.
    */
   async assertCanConsume(
-    tenant: Tenant,
+    subscription: Subscription,
     resource: LimitResource,
     additional = 1,
   ): Promise<void> {
-    if (!this.isUsable(tenant)) {
+    if (!this.isUsable(subscription)) {
       throw new BadRequestException(
-        `Subscription is ${tenant.status}. Reactivate it before using the workspace.`,
+        `Subscription is ${subscription.status}. Reactivate it before using the workspace.`,
       );
     }
 
-    const { used, limit, label } = await this.usage(tenant, resource);
+    const { used, limit, label } = await this.usage(subscription, resource);
     if (used + additional > limit) {
       throw new BadRequestException(
-        `Plan limit reached: the ${tenant.plan?.name ?? 'current'} plan allows ${limit} ${label}, ${used} in use.`,
+        `Plan limit reached: the ${subscription.plan?.name ?? 'current'} plan allows ${limit} ${label}, ${used} in use.`,
       );
     }
   }
 
   async usage(
-    tenant: Tenant,
+    subscription: Subscription,
     resource: LimitResource,
   ): Promise<{ used: number; limit: number; label: string }> {
-    const plan = await this.requirePlan(tenant);
+    const plan = await this.requirePlan(subscription);
 
     switch (resource) {
       case 'organizations': {
         const used = await this.organizationRepo.count({
-          where: { tenantId: tenant.id },
+          where: { tenantId: subscription.id },
         });
         return { used, limit: plan.maxOrganizations, label: 'organizations' };
       }
@@ -187,7 +192,7 @@ export class TenantService {
         const used = await this.userRepo
           .createQueryBuilder('user')
           .innerJoin('organizations', 'org', 'org.id = user.organization_id')
-          .where('org.tenant_id = :tenantId', { tenantId: tenant.id })
+          .where('org.tenant_id = :tenantId', { tenantId: subscription.id })
           .getCount();
         return { used, limit: plan.maxUsers, label: 'users' };
       }
@@ -195,7 +200,7 @@ export class TenantService {
         const used = await this.projectRepo
           .createQueryBuilder('project')
           .innerJoin('organizations', 'org', 'org.id = project.organization_id')
-          .where('org.tenant_id = :tenantId', { tenantId: tenant.id })
+          .where('org.tenant_id = :tenantId', { tenantId: subscription.id })
           .getCount();
         return { used, limit: plan.maxProjects, label: 'projects' };
       }
@@ -203,11 +208,11 @@ export class TenantService {
   }
 
   /** Usage for every limited resource, for the subscription dashboard. */
-  async usageSummary(tenant: Tenant): Promise<PlanUsageDto[]> {
+  async usageSummary(subscription: Subscription): Promise<PlanUsageDto[]> {
     const summary: PlanUsageDto[] = [];
 
     for (const resource of LIMIT_RESOURCES) {
-      const { used, limit } = await this.usage(tenant, resource);
+      const { used, limit } = await this.usage(subscription, resource);
       summary.push({
         resource,
         used,
@@ -219,25 +224,27 @@ export class TenantService {
     return summary;
   }
 
-  private async requirePlan(tenant: Tenant): Promise<Plan> {
+  private async requirePlan(subscription: Subscription): Promise<Plan> {
     const plan =
-      tenant.plan ??
-      (tenant.planId ? await this.planService.findById(tenant.planId) : null);
+      subscription.plan ??
+      (subscription.planId
+        ? await this.planService.findById(subscription.planId)
+        : null);
 
     if (!plan) {
       throw new BadRequestException('Subscription has no plan attached');
     }
 
-    tenant.plan = plan;
+    subscription.plan = plan;
     return plan;
   }
 
   private async assertDowngradeIsSafe(
-    tenant: Tenant,
+    subscription: Subscription,
     plan: Plan,
   ): Promise<void> {
     for (const resource of LIMIT_RESOURCES) {
-      const { used, limit, label } = await this.usage(tenant, resource);
+      const { used, limit, label } = await this.usage(subscription, resource);
       if (used > limit) {
         throw new BadRequestException(
           `Cannot switch to the ${plan.name} plan: ${used} ${label} are in use but the plan allows ${limit}.`,

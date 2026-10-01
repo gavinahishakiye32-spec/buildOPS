@@ -17,7 +17,7 @@ import {
   CreateSubtaskDto,
   SubtaskQueryDto,
   UpdateSubtaskDto,
-} from '../task/dto/task.dto.js';
+} from './dto/subtask.dto.js';
 import { Task } from '../task/task.entity.js';
 
 /**
