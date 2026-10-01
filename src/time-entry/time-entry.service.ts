@@ -59,7 +59,11 @@ export class TimeEntryService {
       });
     }
     if (query.running !== undefined) {
-      qb.andWhere(query.running ? 'entry.exit_time IS NULL' : 'entry.exit_time IS NOT NULL');
+      qb.andWhere(
+        query.running
+          ? 'entry.exit_time IS NULL'
+          : 'entry.exit_time IS NOT NULL',
+      );
     }
 
     const [items, total] = await qb

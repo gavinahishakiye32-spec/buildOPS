@@ -35,11 +35,16 @@ export class AuthService {
       throw new ConflictException('Email already registered');
     }
 
-    const user = await this.userService.create(dto.email, dto.password, dto.name);
+    const user = await this.userService.create(
+      dto.email,
+      dto.password,
+      dto.name,
+    );
     await this.issueVerificationToken(user);
 
     return {
-      message: 'Registration successful. Please verify your email before logging in.',
+      message:
+        'Registration successful. Please verify your email before logging in.',
       user: user.toResponse(),
     };
   }
@@ -137,9 +142,7 @@ export class AuthService {
 
     if (hasPassword) {
       if (!password) {
-        throw new BadRequestException(
-          'New password cannot be empty',
-        );
+        throw new BadRequestException('New password cannot be empty');
       }
       if (dto.currentPassword === undefined) {
         throw new BadRequestException(
@@ -151,9 +154,7 @@ export class AuthService {
         user.passwordHash,
       );
       if (!passwordValid) {
-        throw new BadRequestException(
-          'Incorrect current password',
-        );
+        throw new BadRequestException('Incorrect current password');
       }
       fields.passwordHash = await hash(password, 10);
     }
@@ -171,8 +172,14 @@ export class AuthService {
   }
 
   async verifyEmail(token: string) {
-    const user = await this.userService.findByVerificationToken(this.hashToken(token));
-    if (!user || (user.verificationTokenExpires && user.verificationTokenExpires.getTime() < Date.now())) {
+    const user = await this.userService.findByVerificationToken(
+      this.hashToken(token),
+    );
+    if (
+      !user ||
+      (user.verificationTokenExpires &&
+        user.verificationTokenExpires.getTime() < Date.now())
+    ) {
       throw new BadRequestException('Invalid or expired verification token');
     }
 
@@ -185,7 +192,8 @@ export class AuthService {
   }
 
   async forgotPassword(dto: ForgotPasswordDto) {
-    const message = 'If an account with that email exists, a reset link was sent';
+    const message =
+      'If an account with that email exists, a reset link was sent';
 
     const user = await this.userService.findByEmail(dto.email);
     if (!user) {
@@ -206,7 +214,9 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const user = await this.userService.findByResetToken(this.hashToken(dto.token));
+    const user = await this.userService.findByResetToken(
+      this.hashToken(dto.token),
+    );
     if (
       !user ||
       (user.resetTokenExpires && user.resetTokenExpires.getTime() < Date.now())

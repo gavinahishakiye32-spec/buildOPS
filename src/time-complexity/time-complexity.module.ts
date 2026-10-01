@@ -14,7 +14,13 @@ import { AuthModule } from '../auth/auth.module.js';
   imports: [
     AuthModule,
     AuthorizationModule,
-    TypeOrmModule.forFeature([TimeComplexity, Task, Subtask, TimeEntry, Project]),
+    TypeOrmModule.forFeature([
+      TimeComplexity,
+      Task,
+      Subtask,
+      TimeEntry,
+      Project,
+    ]),
   ],
   controllers: [TimeComplexityController],
   providers: [TimeComplexityService],

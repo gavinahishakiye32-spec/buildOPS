@@ -77,7 +77,10 @@ export class RoleTemplateDto {
   @ApiProperty({ example: 'Creates and updates development tasks.' })
   description: string;
 
-  @ApiProperty({ type: [String], description: 'Permissions the template grants' })
+  @ApiProperty({
+    type: [String],
+    description: 'Permissions the template grants',
+  })
   permissions: PermissionName[];
 }
 

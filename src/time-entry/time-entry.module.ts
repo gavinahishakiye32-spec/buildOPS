@@ -12,7 +12,9 @@ import { AuthModule } from '../auth/auth.module.js';
 @Module({
   imports: [
     AuthModule,
-    AuthorizationModule,TypeOrmModule.forFeature([TimeEntry, Subtask, Task, Project])],
+    AuthorizationModule,
+    TypeOrmModule.forFeature([TimeEntry, Subtask, Task, Project]),
+  ],
   controllers: [TimeEntryController],
   providers: [TimeEntryService],
   exports: [TimeEntryService],

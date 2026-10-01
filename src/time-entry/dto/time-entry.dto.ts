@@ -1,11 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsISO8601,
-  IsOptional,
-  IsUUID,
-} from 'class-validator';
+import { IsBoolean, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 import { PaginationQueryDto } from '../../common/pagination.dto.js';
 
 export class StartTimerDto {
@@ -129,7 +124,10 @@ export class TimeEntryResponseDto {
   })
   durationSeconds: number;
 
-  @ApiProperty({ example: false, description: 'True while the timer is running' })
+  @ApiProperty({
+    example: false,
+    description: 'True while the timer is running',
+  })
   isRunning: boolean;
 
   @ApiProperty({ example: '2026-09-30T09:00:00.000Z' })

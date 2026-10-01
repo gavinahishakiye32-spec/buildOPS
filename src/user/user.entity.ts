@@ -32,10 +32,19 @@ export class User {
   @Column({ name: 'is_verified', type: 'boolean', default: false })
   isVerified: boolean;
 
-  @Column({ name: 'verification_token', type: 'varchar', length: 64, nullable: true })
+  @Column({
+    name: 'verification_token',
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+  })
   verificationToken: string | null;
 
-  @Column({ name: 'verification_token_expires', type: 'timestamp', nullable: true })
+  @Column({
+    name: 'verification_token_expires',
+    type: 'timestamp',
+    nullable: true,
+  })
   verificationTokenExpires: Date | null;
 
   @Column({ name: 'reset_token', type: 'varchar', length: 64, nullable: true })

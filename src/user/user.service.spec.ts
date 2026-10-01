@@ -24,7 +24,7 @@ describe('UserService', () => {
   beforeEach(async () => {
     repo = {
       findOne: jest.fn(),
-     update: jest.fn(async () => ({ affected: 1 })),
+      update: jest.fn(async () => ({ affected: 1 })),
 
       create: jest.fn(),
       save: jest.fn(),
@@ -74,11 +74,7 @@ describe('UserService', () => {
   it('stores a verification token with an expiry', async () => {
     const expires = new Date();
 
-    await userService.setVerificationToken(
-      'user-1',
-      'token-hash',
-      expires,
-    );
+    await userService.setVerificationToken('user-1', 'token-hash', expires);
 
     expect(repo.update).toHaveBeenCalledWith('user-1', {
       verificationToken: 'token-hash',
@@ -99,11 +95,7 @@ describe('UserService', () => {
   it('stores a reset token with an expiry', async () => {
     const expires = new Date();
 
-    await userService.setResetToken(
-      'user-1',
-      'token-hash',
-      expires,
-    );
+    await userService.setResetToken('user-1', 'token-hash', expires);
 
     expect(repo.update).toHaveBeenCalledWith('user-1', {
       resetToken: 'token-hash',
@@ -129,9 +121,7 @@ describe('UserService', () => {
       resetTokenExpires: null,
     });
 
-    expect(
-      await compare('new-password', fields.passwordHash),
-    ).toBe(true);
+    expect(await compare('new-password', fields.passwordHash)).toBe(true);
   });
 
   it('updates profile fields and returns the refreshed user', async () => {

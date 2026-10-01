@@ -9,7 +9,8 @@ import {
 
 const MAX_SECONDS = 86400 * 365;
 
-const DURATION_PATTERN = /^P(?=\d|T)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$/;
+const DURATION_PATTERN =
+  /^P(?=\d|T)(\d+Y)?(\d+M)?(\d+W)?(\d+D)?(T(?=\d)(\d+H)?(\d+M)?(\d+(\.\d+)?S)?)?$/;
 
 /**
  * Durations are stored as PostgreSQL intervals but travel over the API as a
@@ -77,7 +78,8 @@ export class CreateTimeComplexityDto {
 
   @ApiProperty({
     example: 7200,
-    description: 'Minimum expected duration: seconds or ISO-8601 duration (PT2H)',
+    description:
+      'Minimum expected duration: seconds or ISO-8601 duration (PT2H)',
   })
   @Duration()
   @IsInt({ message: 'minDuration must be seconds or an ISO-8601 duration' })
@@ -87,7 +89,8 @@ export class CreateTimeComplexityDto {
 
   @ApiProperty({
     example: 14400,
-    description: 'Maximum expected duration, greater than or equal to minDuration',
+    description:
+      'Maximum expected duration, greater than or equal to minDuration',
   })
   @Duration()
   @IsInt({ message: 'maxDuration must be seconds or an ISO-8601 duration' })

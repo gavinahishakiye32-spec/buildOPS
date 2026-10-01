@@ -7,7 +7,9 @@ export class PlanResponseDto {
   @ApiProperty({ example: 'Growth' })
   name: string;
 
-  @ApiPropertyOptional({ example: 'Multiple workspaces for growing delivery teams.' })
+  @ApiPropertyOptional({
+    example: 'Multiple workspaces for growing delivery teams.',
+  })
   description: string | null;
 
   @ApiProperty({ example: 25, description: 'Maximum users permitted' })
@@ -22,6 +24,9 @@ export class PlanResponseDto {
   @ApiProperty({ example: 3, description: 'Maximum organizations permitted' })
   maxOrganizations: number;
 
-  @ApiProperty({ example: '79.00', description: 'Subscription price (DECIMAL(10,2))' })
+  @ApiProperty({
+    example: '79.00',
+    description: 'Subscription price (DECIMAL(10,2))',
+  })
   price: string;
 }

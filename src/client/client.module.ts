@@ -9,7 +9,9 @@ import { AuthModule } from '../auth/auth.module.js';
 @Module({
   imports: [
     AuthModule,
-    AuthorizationModule,TypeOrmModule.forFeature([Client])],
+    AuthorizationModule,
+    TypeOrmModule.forFeature([Client]),
+  ],
   controllers: [ClientController],
   providers: [ClientService],
   exports: [ClientService, TypeOrmModule],

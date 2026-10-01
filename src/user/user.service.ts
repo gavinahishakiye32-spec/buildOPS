@@ -58,7 +58,11 @@ export class UserService {
     });
   }
 
-  async setResetToken(userId: string, token: string, expires: Date): Promise<void> {
+  async setResetToken(
+    userId: string,
+    token: string,
+    expires: Date,
+  ): Promise<void> {
     await this.userRepo.update(userId, {
       resetToken: token,
       resetTokenExpires: expires,

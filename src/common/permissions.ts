@@ -71,7 +71,8 @@ export const DEFAULT_ROLE_TEMPLATES: {
   {
     key: 'owner',
     name: 'Owner',
-    description: 'Tenant creator. Full access to every resource in the organization.',
+    description:
+      'Tenant creator. Full access to every resource in the organization.',
     permissions: ALL_PERMISSIONS,
   },
   {
@@ -119,7 +120,8 @@ export const DEFAULT_ROLE_TEMPLATES: {
   {
     key: 'developer',
     name: 'Developer',
-    description: 'Creates and updates development tasks, subtasks and their own time.',
+    description:
+      'Creates and updates development tasks, subtasks and their own time.',
     permissions: [
       ...viewOnly('team'),
       ...viewOnly('client'),

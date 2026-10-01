@@ -10,11 +10,7 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import {
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import {
   OrgAuth,
@@ -90,7 +86,9 @@ export class RoleController {
   })
   @ApiResponse({ status: 200, type: [MemberResponseDto] })
   @ApiErrors(403)
-  async listMembers(@OrgAuth() auth: OrganizationAuthContext): Promise<MemberResponseDto[]> {
+  async listMembers(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<MemberResponseDto[]> {
     return this.roleService.listMembers(auth.organizationId);
   }
 
@@ -191,10 +189,7 @@ export class RoleController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Body() dto: CreateRoleDto,
   ): Promise<RoleResponseDto> {
-    const role = await this.roleService.createRole(
-      auth.organizationId,
-      dto,
-    );
+    const role = await this.roleService.createRole(auth.organizationId, dto);
     return role.toResponseWithPermissions();
   }
 
@@ -208,10 +203,7 @@ export class RoleController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('roleId', ParseUUIDPipe) roleId: string,
   ): Promise<RoleResponseDto> {
-    const role = await this.roleService.findRole(
-      auth.organizationId,
-      roleId,
-    );
+    const role = await this.roleService.findRole(auth.organizationId, roleId);
     return role.toResponseWithPermissions();
   }
 

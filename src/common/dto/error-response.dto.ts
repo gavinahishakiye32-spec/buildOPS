@@ -2,7 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ErrorResponseDto {
-  @ApiProperty({ example: 'Validation failed', description: 'Human readable error summary' })
+  @ApiProperty({
+    example: 'Validation failed',
+    description: 'Human readable error summary',
+  })
   statusCode: number;
 
   @ApiProperty({
@@ -11,7 +14,10 @@ export class ErrorResponseDto {
   })
   message: string | string[];
 
-  @ApiProperty({ example: 'Bad Request Exception', description: 'Exception name' })
+  @ApiProperty({
+    example: 'Bad Request Exception',
+    description: 'Exception name',
+  })
   error: string;
 
   @ApiPropertyOptional({

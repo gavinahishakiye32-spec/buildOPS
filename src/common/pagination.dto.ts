@@ -7,7 +7,11 @@ export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 100;
 
 export class PaginationQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: DEFAULT_PAGE, description: 'Page number (1-based)' })
+  @ApiPropertyOptional({
+    minimum: 1,
+    default: DEFAULT_PAGE,
+    description: 'Page number (1-based)',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

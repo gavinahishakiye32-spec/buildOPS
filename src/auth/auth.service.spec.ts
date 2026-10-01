@@ -132,12 +132,8 @@ describe('AuthService', () => {
 
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
-      const [userId, storedToken, expires] =
-        userService.setVerificationToken.mock.calls[0] as [
-          string,
-          string,
-          Date,
-        ];
+      const [userId, storedToken, expires] = userService.setVerificationToken
+        .mock.calls[0] as [string, string, Date];
 
       expect(userId).toBe('user-1');
       expect(storedToken).toMatch(/^[a-f0-9]{64}$/);
@@ -204,12 +200,8 @@ describe('AuthService', () => {
       expect(jwtService.sign).not.toHaveBeenCalled();
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
-      const [userId, storedToken, expires] =
-        userService.setVerificationToken.mock.calls[0] as [
-          string,
-          string,
-          Date,
-        ];
+      const [userId, storedToken, expires] = userService.setVerificationToken
+        .mock.calls[0] as [string, string, Date];
 
       expect(userId).toBe('user-1');
       expect(storedToken).toMatch(/^[a-f0-9]{64}$/);
@@ -267,9 +259,9 @@ describe('AuthService', () => {
     it('throws UnauthorizedException when user is not found', async () => {
       userService.findById.mockResolvedValue(null);
 
-      await expect(
-        authService.getProfile('nope'),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      await expect(authService.getProfile('nope')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -326,9 +318,7 @@ describe('AuthService', () => {
         email: 'new@example.com',
       });
 
-      expect(userService.findByEmail).toHaveBeenCalledWith(
-        'new@example.com',
-      );
+      expect(userService.findByEmail).toHaveBeenCalledWith('new@example.com');
 
       expect(userService.updateProfile).toHaveBeenCalledWith('user-1', {
         email: 'new@example.com',
@@ -339,12 +329,8 @@ describe('AuthService', () => {
 
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
-      const [userId, storedToken, expires] =
-        userService.setVerificationToken.mock.calls[0] as [
-          string,
-          string,
-          Date,
-        ];
+      const [userId, storedToken, expires] = userService.setVerificationToken
+        .mock.calls[0] as [string, string, Date];
 
       expect(userId).toBe('user-1');
       expect(storedToken).toMatch(/^[a-f0-9]{64}$/);
@@ -358,9 +344,9 @@ describe('AuthService', () => {
         createHash('sha256').update(sentToken).digest('hex'),
       );
 
-      expect(
-        mailService.sendVerificationEmail.mock.calls[0][0],
-      ).toBe('new@example.com');
+      expect(mailService.sendVerificationEmail.mock.calls[0][0]).toBe(
+        'new@example.com',
+      );
 
       expect(result.email).toBe('new@example.com');
       expect(result.isVerified).toBe(false);
@@ -544,14 +530,10 @@ describe('AuthService', () => {
         verificationTokenExpires: new Date(Date.now() + 60_000),
       });
 
-      const result = await authService.verifyEmail(
-        'raw-verification-token',
-      );
+      const result = await authService.verifyEmail('raw-verification-token');
 
       expect(userService.findByVerificationToken).toHaveBeenCalledWith(
-        createHash('sha256')
-          .update('raw-verification-token')
-          .digest('hex'),
+        createHash('sha256').update('raw-verification-token').digest('hex'),
       );
 
       expect(userService.markVerified).toHaveBeenCalledWith('user-1');
@@ -562,9 +544,9 @@ describe('AuthService', () => {
     it('throws BadRequestException for an invalid token', async () => {
       userService.findByVerificationToken.mockResolvedValue(null);
 
-      await expect(
-        authService.verifyEmail('bad-token'),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      await expect(authService.verifyEmail('bad-token')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
 
       expect(userService.markVerified).not.toHaveBeenCalled();
     });
@@ -610,12 +592,8 @@ describe('AuthService', () => {
 
       expect(userService.setResetToken).toHaveBeenCalledTimes(1);
 
-      const [userId, storedToken, expires] =
-        userService.setResetToken.mock.calls[0] as [
-          string,
-          string,
-          Date,
-        ];
+      const [userId, storedToken, expires] = userService.setResetToken.mock
+        .calls[0] as [string, string, Date];
 
       expect(userId).toBe('user-1');
       expect(storedToken).toMatch(/^[a-f0-9]{64}$/);
@@ -658,9 +636,7 @@ describe('AuthService', () => {
       });
 
       expect(userService.findByResetToken).toHaveBeenCalledWith(
-        createHash('sha256')
-          .update('raw-reset-token')
-          .digest('hex'),
+        createHash('sha256').update('raw-reset-token').digest('hex'),
       );
 
       expect(userService.updatePassword).toHaveBeenCalledWith(

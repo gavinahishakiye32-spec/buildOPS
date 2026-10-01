@@ -136,10 +136,7 @@ export class TeamService {
 
     const user = await this.resolveUser(dto.userId, dto.email);
 
-    const membership = await this.roleService.resolve(
-      organizationId,
-      user.id,
-    );
+    const membership = await this.roleService.resolve(organizationId, user.id);
 
     if (!membership) {
       throw new BadRequestException(
@@ -225,10 +222,7 @@ export class TeamService {
     }
   }
 
-  private async resolveUser(
-    userId?: string,
-    email?: string,
-  ): Promise<User> {
+  private async resolveUser(userId?: string, email?: string): Promise<User> {
     const user = userId
       ? await this.userService.findById(userId)
       : await this.userService.findByEmail(email as string);
@@ -240,7 +234,10 @@ export class TeamService {
     return user;
   }
 
-  private async loadMember(teamId: string, memberId: string): Promise<TeamMember> {
+  private async loadMember(
+    teamId: string,
+    memberId: string,
+  ): Promise<TeamMember> {
     const member = await this.teamMemberRepo.findOne({
       where: { id: memberId, teamId },
       relations: { user: true },

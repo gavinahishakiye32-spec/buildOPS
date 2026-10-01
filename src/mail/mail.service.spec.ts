@@ -1,13 +1,6 @@
-
 import { Test } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import {
-  jest,
-  describe,
-  it,
-  expect,
-  beforeEach,
-} from '@jest/globals';
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
 const mockCreateTransport = jest.fn();
 
@@ -79,10 +72,7 @@ describe('MailService', () => {
   });
 
   it('sends a verification email via Nodemailer', async () => {
-    await mailService.sendVerificationEmail(
-      'user@example.com',
-      'token-abc',
-    );
+    await mailService.sendVerificationEmail('user@example.com', 'token-abc');
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
@@ -95,9 +85,7 @@ describe('MailService', () => {
 
     expect(payload.to).toBe('user@example.com');
 
-    expect(payload.from).toBe(
-      'ops-app <onboarding@resend.dev>',
-    );
+    expect(payload.from).toBe('ops-app <onboarding@resend.dev>');
 
     expect(payload.subject).toBe('Verify your email');
 
@@ -109,10 +97,7 @@ describe('MailService', () => {
   });
 
   it('sends a reset password email via Nodemailer', async () => {
-    await mailService.sendResetPasswordEmail(
-      'user@example.com',
-      'token-abc',
-    );
+    await mailService.sendResetPasswordEmail('user@example.com', 'token-abc');
 
     expect(mockSendMail).toHaveBeenCalledTimes(1);
 
@@ -132,18 +117,10 @@ describe('MailService', () => {
   });
 
   it('throws when Nodemailer fails to send an email', async () => {
-    mockSendMail.mockRejectedValue(
-      new Error('SMTP connection failed'),
-    );
+    mockSendMail.mockRejectedValue(new Error('SMTP connection failed'));
 
     await expect(
-      mailService.sendVerificationEmail(
-        'user@example.com',
-        'token-abc',
-      ),
-    ).rejects.toThrow(
-      'Failed to send email: SMTP connection failed',
-    );
+      mailService.sendVerificationEmail('user@example.com', 'token-abc'),
+    ).rejects.toThrow('Failed to send email: SMTP connection failed');
   });
 });
-

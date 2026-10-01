@@ -12,7 +12,10 @@ import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
   imports: [
-    AuthModule,TypeOrmModule.forFeature([Role, Permission]), UserModule],
+    AuthModule,
+    TypeOrmModule.forFeature([Role, Permission]),
+    UserModule,
+  ],
   controllers: [RoleController],
   providers: [
     RoleService,

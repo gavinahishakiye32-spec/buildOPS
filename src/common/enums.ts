@@ -1,16 +1,30 @@
 export const USER_STATUSES = ['active', 'inactive', 'suspended'] as const;
 export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const TENANT_STATUSES = ['trial', 'active', 'cancelled', 'suspended'] as const;
+export const TENANT_STATUSES = [
+  'trial',
+  'active',
+  'cancelled',
+  'suspended',
+] as const;
 export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
-export const ORGANIZATION_STATUSES = ['active', 'inactive', 'archived'] as const;
+export const ORGANIZATION_STATUSES = [
+  'active',
+  'inactive',
+  'archived',
+] as const;
 export type OrganizationStatus = (typeof ORGANIZATION_STATUSES)[number];
 
 export const TEAM_STATUSES = ['active', 'inactive', 'archived'] as const;
 export type TeamStatus = (typeof TEAM_STATUSES)[number];
 
-export const TEAM_MEMBER_STATUSES = ['pending', 'active', 'inactive', 'removed'] as const;
+export const TEAM_MEMBER_STATUSES = [
+  'pending',
+  'active',
+  'inactive',
+  'removed',
+] as const;
 export type TeamMemberStatus = (typeof TEAM_MEMBER_STATUSES)[number];
 
 export const TEAM_MEMBER_ROLES = ['lead', 'member', 'observer'] as const;
@@ -40,10 +54,20 @@ export const TASK_STATUSES = [
 ] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 
-export const SUBTASK_STATUSES = ['todo', 'in_progress', 'done', 'cancelled'] as const;
+export const SUBTASK_STATUSES = [
+  'todo',
+  'in_progress',
+  'done',
+  'cancelled',
+] as const;
 export type SubtaskStatus = (typeof SUBTASK_STATUSES)[number];
 
-export const TIME_COMPLEXITY_NAMES = ['low', 'medium', 'high', 'critical'] as const;
+export const TIME_COMPLEXITY_NAMES = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const;
 export type TimeComplexityName = (typeof TIME_COMPLEXITY_NAMES)[number];
 
 export const TIME_COMPLEXITY_STATUSES = ['active', 'archived'] as const;

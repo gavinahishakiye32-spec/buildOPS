@@ -23,7 +23,10 @@ import {
   Protected,
   RequirePermissions,
 } from '../common/decorators/protected.decorator.js';
-import { PaginationQueryDto, type Paginated } from '../common/pagination.dto.js';
+import {
+  PaginationQueryDto,
+  type Paginated,
+} from '../common/pagination.dto.js';
 import { BadgeService } from './badge.service.js';
 import {
   BadgeMessageResponseDto,
@@ -82,10 +85,7 @@ export class BadgeController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('badgeId', ParseUUIDPipe) badgeId: string,
   ): Promise<BadgeResponseDto> {
-    const badge = await this.badgeService.findOne(
-      auth.organizationId,
-      badgeId,
-    );
+    const badge = await this.badgeService.findOne(auth.organizationId, badgeId);
     return badge.toResponse();
   }
 

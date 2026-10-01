@@ -66,7 +66,9 @@ export function configureApp(app: INestApplication): INestApplication {
   app.enableShutdownHooks();
 
   if (origins === true) {
-    console.log('[bootstrap] CORS: allowing all origins (set ALLOWED_ORIGINS to restrict)');
+    console.log(
+      '[bootstrap] CORS: allowing all origins (set ALLOWED_ORIGINS to restrict)',
+    );
   } else {
     console.log(`[bootstrap] CORS allowed origins: ${origins.join(', ')}`);
   }

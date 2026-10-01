@@ -60,10 +60,7 @@ export class SubtaskService {
     return toPaginated(items, total, page, limit);
   }
 
-  async findOne(
-    organizationId: string,
-    subtaskId: string,
-  ): Promise<Subtask> {
+  async findOne(organizationId: string, subtaskId: string): Promise<Subtask> {
     const subtask = await this.scopedQuery(organizationId)
       .andWhere('subtask.id = :subtaskId', { subtaskId })
       .getOne();
