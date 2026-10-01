@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# coverage
+coverage/
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
