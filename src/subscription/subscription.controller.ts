@@ -18,28 +18,28 @@ import { Auth, SkipOrganization } from '../common/decorators/auth.decorator.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
 import { Protected } from '../common/decorators/protected.decorator.js';
 import type { AuthContext } from '../common/types.js';
-import { TenantService } from './tenant.service.js';
+import { SubscriptionService } from './subscription.service.js';
 import { ChangePlanDto, SelectPlanDto } from './dto/select-plan.dto.js';
 import {
   PlanUsageDto,
   SubscriptionCreatedResponseDto,
   SubscriptionMessageResponseDto,
-  SubscriptionResponseDto,
-} from './dto/tenant-response.dto.js';
+  SubscriptionWithUsageDto,
+} from './dto/subscription-response.dto.js';
 
 @ApiTags('subscription')
 @ApiBearerAuth()
 @Protected()
 @SkipOrganization()
 @Controller('subscription')
-export class TenantController {
-  constructor(private readonly tenantService: TenantService) {}
+export class SubscriptionController {
+  constructor(private readonly subscriptionService: SubscriptionService) {}
 
   @Post()
   @ApiOperation({
     summary: 'Subscribe to a plan',
     description:
-      'Creates (or reactivates) the tenant subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.',
+      'Creates (or reactivates) the subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.',
   })
   @ApiResponse({
     status: 201,
@@ -51,12 +51,15 @@ export class TenantController {
     @Auth() auth: AuthContext,
     @Body() dto: SelectPlanDto,
   ): Promise<SubscriptionCreatedResponseDto> {
-    const tenant = await this.tenantService.subscribe(auth.userId, dto);
-    const usage = await this.tenantService.usageSummary(tenant);
+    const subscription = await this.subscriptionService.subscribe(
+      auth.userId,
+      dto,
+    );
+    const usage = await this.subscriptionService.usageSummary(subscription);
 
     return {
       message: 'Subscription active',
-      subscription: tenant.toResponse(),
+      subscription: subscription.toResponse(),
       usage,
     };
   }
@@ -65,18 +68,20 @@ export class TenantController {
   @ApiOperation({
     summary: 'Get current subscription',
     description:
-      'Returns the tenant subscription of the authenticated user with the attached plan and current usage against every plan limit.',
+      'Returns the subscription of the authenticated user with the attached plan and current usage against every plan limit.',
   })
   @ApiOkResponse({
     description: 'Current subscription and usage',
-    type: SubscriptionResponseDto,
+    type: SubscriptionWithUsageDto,
   })
   @ApiErrors(404)
-  async findMine(@Auth() auth: AuthContext): Promise<SubscriptionResponseDto> {
-    const tenant = await this.tenantService.requireForUser(auth.userId);
-    const usage = await this.tenantService.usageSummary(tenant);
+  async findMine(@Auth() auth: AuthContext): Promise<SubscriptionWithUsageDto> {
+    const subscription = await this.subscriptionService.requireForUser(
+      auth.userId,
+    );
+    const usage = await this.subscriptionService.usageSummary(subscription);
 
-    return { subscription: tenant.toResponse(), usage };
+    return { subscription: subscription.toResponse(), usage };
   }
 
   @Get('usage')
@@ -91,8 +96,10 @@ export class TenantController {
   })
   @ApiErrors(404)
   async usage(@Auth() auth: AuthContext): Promise<PlanUsageDto[]> {
-    const tenant = await this.tenantService.requireForUser(auth.userId);
-    return this.tenantService.usageSummary(tenant);
+    const subscription = await this.subscriptionService.requireForUser(
+      auth.userId,
+    );
+    return this.subscriptionService.usageSummary(subscription);
   }
 
   @Patch('plan')
@@ -103,16 +110,21 @@ export class TenantController {
   })
   @ApiOkResponse({
     description: 'Subscription with the new plan',
-    type: SubscriptionResponseDto,
+    type: SubscriptionWithUsageDto,
   })
   @ApiErrors(400, 404)
   async changePlan(
     @Auth() auth: AuthContext,
     @Body() dto: ChangePlanDto,
-  ): Promise<SubscriptionResponseDto> {
-    const tenant = await this.tenantService.requireForUser(auth.userId);
-    const updated = await this.tenantService.changePlan(tenant, dto.planId);
-    const usage = await this.tenantService.usageSummary(updated);
+  ): Promise<SubscriptionWithUsageDto> {
+    const subscription = await this.subscriptionService.requireForUser(
+      auth.userId,
+    );
+    const updated = await this.subscriptionService.changePlan(
+      subscription,
+      dto.planId,
+    );
+    const usage = await this.subscriptionService.usageSummary(updated);
 
     return { subscription: updated.toResponse(), usage };
   }
@@ -132,8 +144,10 @@ export class TenantController {
   async cancel(
     @Auth() auth: AuthContext,
   ): Promise<SubscriptionMessageResponseDto> {
-    const tenant = await this.tenantService.requireForUser(auth.userId);
-    await this.tenantService.cancel(tenant);
+    const subscription = await this.subscriptionService.requireForUser(
+      auth.userId,
+    );
+    await this.subscriptionService.cancel(subscription);
 
     return { message: 'Subscription cancelled' };
   }

@@ -59,7 +59,7 @@ export class PlanService implements OnModuleInit {
     private readonly planRepo: Repository<Plan>,
   ) {}
 
-  /** The built-in catalogue must exist before any tenant can subscribe. */
+  /** The built-in catalogue must exist before anyone can subscribe. */
   async onModuleInit(): Promise<void> {
     const seeded = await this.seedDefaults();
     if (seeded > 0) {

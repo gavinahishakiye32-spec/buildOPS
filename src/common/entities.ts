@@ -1,6 +1,6 @@
 import { User } from '../user/user.entity.js';
 import { Plan } from '../plan/plan.entity.js';
-import { Tenant } from '../tenant/tenant.entity.js';
+import { Subscription } from '../subscription/subscription.entity.js';
 import { Organization } from '../organization/organization.entity.js';
 import { Role } from '../role/role.entity.js';
 import { Permission } from '../role/permission.entity.js';
@@ -18,7 +18,7 @@ import { TimeComplexity } from '../time-complexity/time-complexity.entity.js';
 export const ENTITIES = [
   User,
   Plan,
-  Tenant,
+  Subscription,
   Organization,
   Role,
   Permission,

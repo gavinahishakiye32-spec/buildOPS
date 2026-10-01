@@ -380,7 +380,7 @@ first organization are separate steps, and capacity is plan-limited.
 POST /auth/register  →  GET /auth/verify-email?token=…  →  POST /auth/login
       ↓
 GET  /plans                                   (public catalogue)
-POST /subscription   { planId, status? }       (creates or reactivates the tenant)
+POST /subscription   { planId, status? }       (creates or reactivates the subscription)
       ↓
 POST /organizations  { name, status? }        (creator receives the Owner role)
       ↓
@@ -728,7 +728,7 @@ Shared query parameters on `overview`, `projects` and `clients`:
 | Field | Allowed values |
 | --- | --- |
 | `user.status` | `active`, `inactive`, `suspended` (only the first two via `PATCH /auth/profile`) |
-| `tenant.status` | `trial`, `active`, `cancelled`, `suspended` |
+| `subscription.status` | `trial`, `active`, `cancelled`, `suspended` |
 | `organization.status`, `team.status`, `client.status` | `active`, `inactive`, `archived` |
 | `teamMember.status` | `pending`, `active`, `inactive`, `removed` |
 | `teamMember.role` | `lead`, `member`, `observer` |
@@ -750,7 +750,7 @@ marked **ro**.
 `maxProjects`, `maxStorageGb`, `maxOrganizations`, `price` (decimal **string**,
 e.g. `"79.00"` — parse before display).
 
-**Subscription** (`TenantResponseDto`): `id`, `userId`, `planId | null`,
+**Subscription** (`SubscriptionResponseDto`): `id`, `userId`, `planId | null`,
 `plan | null` (embedded `PlanResponseDto`), `status`, `createdAt` ro,
 `updatedAt` ro.
 

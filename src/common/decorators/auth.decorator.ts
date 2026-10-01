@@ -10,7 +10,7 @@ import type { AuthContext, AuthenticatedRequest } from '../types.js';
 export const REQUIRED_PERMISSIONS_KEY = 'requiredPermissions';
 export const SKIP_ORGANIZATION_KEY = 'skipOrganization';
 
-/** Requires a JWT but no organization context (tenant-level endpoints). */
+/** Requires a JWT but no organization context (subscription-level endpoints). */
 export const SkipOrganization = () =>
   applyDecorators(
     SetMetadata(SKIP_ORGANIZATION_KEY, true),

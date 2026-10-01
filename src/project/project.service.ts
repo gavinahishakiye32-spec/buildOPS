@@ -10,7 +10,7 @@ import {
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
-import { TenantService } from '../tenant/tenant.service.js';
+import { SubscriptionService } from '../subscription/subscription.service.js';
 import { Client } from '../client/client.entity.js';
 import { Project } from './project.entity.js';
 import {
@@ -30,7 +30,7 @@ export class ProjectService {
     private readonly projectRepo: Repository<Project>,
     @InjectRepository(Client)
     private readonly clientRepo: Repository<Client>,
-    private readonly tenantService: TenantService,
+    private readonly subscriptionService: SubscriptionService,
   ) {}
 
   async list(
@@ -73,9 +73,9 @@ export class ProjectService {
     organizationId: string,
     dto: CreateProjectDto,
   ): Promise<Project> {
-    const tenant =
-      await this.tenantService.requireByOrganizationId(organizationId);
-    await this.tenantService.assertCanConsume(tenant, 'projects');
+    const subscription =
+      await this.subscriptionService.requireByOrganizationId(organizationId);
+    await this.subscriptionService.assertCanConsume(subscription, 'projects');
 
     const clientId = await this.resolveClient(organizationId, dto.clientId);
     this.assertDateOrder(dto.startDate, dto.endDate);

@@ -1,8 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PlanResponseDto } from '../../plan/dto/plan-response.dto.js';
-import { PLAN_LIMIT_RESOURCES, TENANT_STATUSES } from '../../common/enums.js';
+import {
+  PLAN_LIMIT_RESOURCES,
+  SUBSCRIPTION_STATUSES,
+} from '../../common/enums.js';
 
-export class TenantResponseDto {
+export class SubscriptionResponseDto {
   @ApiProperty({ example: '4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b' })
   id: string;
 
@@ -18,7 +21,7 @@ export class TenantResponseDto {
   @ApiPropertyOptional({ type: PlanResponseDto, nullable: true })
   plan: PlanResponseDto | null;
 
-  @ApiProperty({ enum: TENANT_STATUSES, example: 'active' })
+  @ApiProperty({ enum: SUBSCRIPTION_STATUSES, example: 'active' })
   status: string;
 
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
@@ -46,9 +49,10 @@ export class PlanUsageDto {
   remaining: number;
 }
 
-export class SubscriptionResponseDto {
-  @ApiProperty({ type: TenantResponseDto })
-  subscription: TenantResponseDto;
+/** A subscription paired with the capacity it has consumed so far. */
+export class SubscriptionWithUsageDto {
+  @ApiProperty({ type: SubscriptionResponseDto })
+  subscription: SubscriptionResponseDto;
 
   @ApiProperty({
     type: [PlanUsageDto],
@@ -57,7 +61,7 @@ export class SubscriptionResponseDto {
   usage: PlanUsageDto[];
 }
 
-export class SubscriptionCreatedResponseDto extends SubscriptionResponseDto {
+export class SubscriptionCreatedResponseDto extends SubscriptionWithUsageDto {
   @ApiProperty({ example: 'Subscription active' })
   message: string;
 }

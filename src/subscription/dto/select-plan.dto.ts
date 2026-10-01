@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsUUID } from 'class-validator';
-import { TENANT_STATUSES } from '../../common/enums.js';
+import { SUBSCRIPTION_STATUSES } from '../../common/enums.js';
 
 export class SelectPlanDto {
   @ApiProperty({
@@ -11,13 +11,13 @@ export class SelectPlanDto {
   planId: string;
 
   @ApiPropertyOptional({
-    enum: TENANT_STATUSES,
+    enum: SUBSCRIPTION_STATUSES,
     default: 'active',
     description:
       'Subscription status. "trial" starts a trial subscription; "active" activates immediately.',
   })
   @IsOptional()
-  @IsIn(TENANT_STATUSES)
+  @IsIn(SUBSCRIPTION_STATUSES)
   status?: string;
 }
 

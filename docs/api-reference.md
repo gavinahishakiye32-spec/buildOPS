@@ -305,7 +305,7 @@ Public catalogue of subscription plans and their capacity limits (max_users, max
 
 ## subscription
 
-The tenant subscription of the authenticated user: plan, status and usage
+The subscription of the authenticated user: plan, status and usage
 
 ### DELETE /subscription
 
@@ -336,7 +336,7 @@ Cancels the subscription. Data is preserved but capacity-consuming operations ar
 
 **Get current subscription**
 
-Returns the tenant subscription of the authenticated user with the attached plan and current usage against every plan limit.
+Returns the subscription of the authenticated user with the attached plan and current usage against every plan limit.
 
 **Auth:** bearer token  
 **Organization:** not required
@@ -345,16 +345,16 @@ Returns the tenant subscription of the authenticated user with the attached plan
 
 | Status | Schema | Meaning |
 | --- | --- | --- |
-| `200` | SubscriptionResponseDto | Current subscription and usage |
+| `200` | SubscriptionWithUsageDto | Current subscription and usage |
 | `401` | ErrorResponseDto | Missing, invalid or expired access token |
 | `404` | ErrorResponseDto | Resource not found in this organization |
 
 
-**200 body fields** (`SubscriptionResponseDto`)
+**200 body fields** (`SubscriptionWithUsageDto`)
 
 | Field | Type | Constraints | Example |
 | --- | --- | --- | --- |
-| `subscription` (required) | TenantResponseDto | — | — |
+| `subscription` (required) | SubscriptionResponseDto | — | — |
 | `usage` (required) | PlanUsageDto[] | — | — |
 
 
@@ -362,7 +362,7 @@ Returns the tenant subscription of the authenticated user with the attached plan
 
 **Subscribe to a plan**
 
-Creates (or reactivates) the tenant subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.
+Creates (or reactivates) the subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.
 
 **Auth:** bearer token  
 **Organization:** not required
@@ -392,7 +392,7 @@ Schema: `SelectPlanDto`
 
 | Field | Type | Constraints | Example |
 | --- | --- | --- | --- |
-| `subscription` (required) | TenantResponseDto | — | — |
+| `subscription` (required) | SubscriptionResponseDto | — | — |
 | `usage` (required) | PlanUsageDto[] | — | — |
 | `message` (required) | string | — | `"Subscription active"` |
 
@@ -419,17 +419,17 @@ Schema: `ChangePlanDto`
 
 | Status | Schema | Meaning |
 | --- | --- | --- |
-| `200` | SubscriptionResponseDto | Subscription with the new plan |
+| `200` | SubscriptionWithUsageDto | Subscription with the new plan |
 | `400` | ErrorResponseDto | Validation or business rule failed |
 | `401` | ErrorResponseDto | Missing, invalid or expired access token |
 | `404` | ErrorResponseDto | Resource not found in this organization |
 
 
-**200 body fields** (`SubscriptionResponseDto`)
+**200 body fields** (`SubscriptionWithUsageDto`)
 
 | Field | Type | Constraints | Example |
 | --- | --- | --- | --- |
-| `subscription` (required) | TenantResponseDto | — | — |
+| `subscription` (required) | SubscriptionResponseDto | — | — |
 | `usage` (required) | PlanUsageDto[] | — | — |
 
 
@@ -463,7 +463,7 @@ Capacity consumed versus granted for organizations, users and projects.
 
 ## organizations
 
-Organization CRUD within the tenant subscription
+Organization CRUD within the subscription
 
 ### GET /organizations
 
@@ -2269,7 +2269,7 @@ Schema: `UpdateBadgeDto`
 
 ## tasks
 
-Tasks and their subtasks
+Tasks of a project of the active organization
 
 ### GET /tasks
 
@@ -2506,6 +2506,10 @@ Schema: `UpdateTaskDto`
 | `updatedAt` (required) | string (date-time) | ISO 8601 | `"2026-09-30T10:00:00.000Z"` |
 
 
+## subtasks
+
+Subtasks of a task, assigned to individual members of its team
+
 ### GET /tasks/{taskId}/subtasks
 
 **List subtasks**
@@ -2626,17 +2630,17 @@ Deletes the subtask with its time entries.
 
 | Status | Schema | Meaning |
 | --- | --- | --- |
-| `200` | TaskMessageResponseDto | — |
+| `200` | SubtaskMessageResponseDto | — |
 | `401` | ErrorResponseDto | Missing, invalid or expired access token |
 | `403` | ErrorResponseDto | Permission denied |
 | `404` | ErrorResponseDto | Resource not found in this organization |
 
 
-**200 body fields** (`TaskMessageResponseDto`)
+**200 body fields** (`SubtaskMessageResponseDto`)
 
 | Field | Type | Constraints | Example |
 | --- | --- | --- | --- |
-| `message` (required) | string | — | `"Task deleted"` |
+| `message` (required) | string | — | `"Subtask deleted"` |
 
 
 ### GET /tasks/{taskId}/subtasks/{subtaskId}
@@ -3583,7 +3587,7 @@ Each list is the full set of accepted values for that field.
   `todo`, `in_progress`, `in_review`, `done`, `cancelled`
 - **`status`** (`CreateTimeComplexityDto`, `TimeComplexityResponseDto`, `UpdateTimeComplexityDto`):
   `active`, `archived`
-- **`status`** (`SelectPlanDto`, `TenantResponseDto`):
+- **`status`** (`SelectPlanDto`, `SubscriptionResponseDto`):
   `trial`, `active`, `cancelled`, `suspended`
 - **`status`** (`SubtaskResponseDto`, `CreateSubtaskDto`, `UpdateSubtaskDto`, `OverdueSubtaskDto`):
   `todo`, `in_progress`, `done`, `cancelled`

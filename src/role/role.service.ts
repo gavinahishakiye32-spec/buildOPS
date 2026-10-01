@@ -281,7 +281,7 @@ export class RoleService extends MembershipResolver {
     await this.roleRepo.delete(roleId);
   }
 
-  /** Grants the tenant creator full access to a freshly created organization. */
+  /** Grants the subscription creator full access to a freshly created organization. */
   async bootstrapOwner(organizationId: string, userId: string): Promise<Role> {
     const owner = this.findTemplate('owner');
     const existing = await this.roleRepo.findOne({

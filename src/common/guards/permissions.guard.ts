@@ -21,7 +21,7 @@ import {
 
 /**
  * Resolves the organization context and enforces the required permissions
- * (spec §5: `Tenant Context → Organization Context → Role/Permissions`).
+ * (spec §5: `Subscription Context → Organization Context → Role/Permissions`).
  *
  * Runs **after** `JwtAuthGuard`, so `request.user` is always populated.
  * The active organization comes from the `x-organization-id` header or the

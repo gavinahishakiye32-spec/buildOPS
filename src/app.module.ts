@@ -10,7 +10,8 @@ import { AuthModule } from './auth/auth.module.js';
 import { ENTITIES } from './common/entities.js';
 import { isProduction } from './common/env.js';
 import { PlanModule } from './plan/plan.module.js';
-import { TenantModule } from './tenant/tenant.module.js';
+import { SubscriptionModule } from './subscription/subscription.module.js';
+
 import { OrganizationModule } from './organization/organization.module.js';
 import { RoleModule } from './role/role.module.js';
 import { TeamModule } from './team/team.module.js';
@@ -18,6 +19,7 @@ import { ClientModule } from './client/client.module.js';
 import { ProjectModule } from './project/project.module.js';
 import { BadgeModule } from './badge/badge.module.js';
 import { TaskModule } from './task/task.module.js';
+import { SubtaskModule } from './subtask/subtask.module.js';
 import { TimeEntryModule } from './time-entry/time-entry.module.js';
 import { TimeComplexityModule } from './time-complexity/time-complexity.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
@@ -60,7 +62,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     }),
     AuthModule,
     PlanModule,
-    TenantModule,
+    SubscriptionModule,
     OrganizationModule,
     RoleModule,
     TeamModule,
@@ -68,6 +70,7 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
     ProjectModule,
     BadgeModule,
     TaskModule,
+    SubtaskModule,
     TimeEntryModule,
     TimeComplexityModule,
     DashboardModule,

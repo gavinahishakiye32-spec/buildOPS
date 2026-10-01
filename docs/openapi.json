@@ -315,8 +315,8 @@
     },
     "/subscription": {
       "post": {
-        "description": "Creates (or reactivates) the tenant subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.",
-        "operationId": "TenantController_subscribe",
+        "description": "Creates (or reactivates) the subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.",
+        "operationId": "SubscriptionController_subscribe",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -402,8 +402,8 @@
         }
       },
       "get": {
-        "description": "Returns the tenant subscription of the authenticated user with the attached plan and current usage against every plan limit.",
-        "operationId": "TenantController_findMine",
+        "description": "Returns the subscription of the authenticated user with the attached plan and current usage against every plan limit.",
+        "operationId": "SubscriptionController_findMine",
         "parameters": [],
         "responses": {
           "200": {
@@ -411,7 +411,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponseDto"
+                  "$ref": "#/components/schemas/SubscriptionWithUsageDto"
                 }
               }
             }
@@ -460,7 +460,7 @@
       },
       "delete": {
         "description": "Cancels the subscription. Data is preserved but capacity-consuming operations are refused until the subscription is reactivated by subscribing again.",
-        "operationId": "TenantController_cancel",
+        "operationId": "SubscriptionController_cancel",
         "parameters": [],
         "responses": {
           "200": {
@@ -519,7 +519,7 @@
     "/subscription/usage": {
       "get": {
         "description": "Capacity consumed versus granted for organizations, users and projects.",
-        "operationId": "TenantController_usage",
+        "operationId": "SubscriptionController_usage",
         "parameters": [],
         "responses": {
           "200": {
@@ -581,7 +581,7 @@
     "/subscription/plan": {
       "patch": {
         "description": "Switches the subscription to another plan. Downgrades are rejected while the current usage exceeds the target plan limits.",
-        "operationId": "TenantController_changePlan",
+        "operationId": "SubscriptionController_changePlan",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -599,7 +599,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubscriptionResponseDto"
+                  "$ref": "#/components/schemas/SubscriptionWithUsageDto"
                 }
               }
             }
@@ -5231,7 +5231,7 @@
     "/tasks/{taskId}/subtasks": {
       "get": {
         "description": "Paginated subtasks of a task in the active organization.",
-        "operationId": "TaskController_listSubtasks",
+        "operationId": "SubtaskController_listSubtasks",
         "parameters": [
           {
             "name": "taskId",
@@ -5347,7 +5347,7 @@
         ],
         "summary": "List subtasks",
         "tags": [
-          "tasks"
+          "subtasks"
         ],
         "x-auth": {
           "required": true,
@@ -5365,7 +5365,7 @@
       },
       "post": {
         "description": "Creates a subtask. When assignedTo is set, the user must be an active member of the team assigned to the task.",
-        "operationId": "TaskController_createSubtask",
+        "operationId": "SubtaskController_createSubtask",
         "parameters": [
           {
             "name": "taskId",
@@ -5455,7 +5455,7 @@
         ],
         "summary": "Create a subtask",
         "tags": [
-          "tasks"
+          "subtasks"
         ],
         "x-auth": {
           "required": true,
@@ -5476,7 +5476,7 @@
     "/tasks/{taskId}/subtasks/{subtaskId}": {
       "get": {
         "description": "One subtask of a task of the active organization.",
-        "operationId": "TaskController_findSubtask",
+        "operationId": "SubtaskController_findSubtask",
         "parameters": [
           {
             "name": "taskId",
@@ -5554,7 +5554,7 @@
         ],
         "summary": "Get a subtask",
         "tags": [
-          "tasks"
+          "subtasks"
         ],
         "x-auth": {
           "required": true,
@@ -5572,7 +5572,7 @@
       },
       "patch": {
         "description": "Updates fields and reassigns the subtask to another team member.",
-        "operationId": "TaskController_updateSubtask",
+        "operationId": "SubtaskController_updateSubtask",
         "parameters": [
           {
             "name": "taskId",
@@ -5670,7 +5670,7 @@
         ],
         "summary": "Update a subtask",
         "tags": [
-          "tasks"
+          "subtasks"
         ],
         "x-auth": {
           "required": true,
@@ -5688,7 +5688,7 @@
       },
       "delete": {
         "description": "Deletes the subtask with its time entries.",
-        "operationId": "TaskController_removeSubtask",
+        "operationId": "SubtaskController_removeSubtask",
         "parameters": [
           {
             "name": "taskId",
@@ -5723,7 +5723,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskMessageResponseDto"
+                  "$ref": "#/components/schemas/SubtaskMessageResponseDto"
                 }
               }
             }
@@ -5766,7 +5766,7 @@
         ],
         "summary": "Delete a subtask",
         "tags": [
-          "tasks"
+          "subtasks"
         ],
         "x-auth": {
           "required": true,
@@ -7776,11 +7776,11 @@
     },
     {
       "name": "subscription",
-      "description": "The tenant subscription of the authenticated user: plan, status and usage"
+      "description": "The subscription of the authenticated user: plan, status and usage"
     },
     {
       "name": "organizations",
-      "description": "Organization CRUD within the tenant subscription"
+      "description": "Organization CRUD within the subscription"
     },
     {
       "name": "roles",
@@ -7804,7 +7804,11 @@
     },
     {
       "name": "tasks",
-      "description": "Tasks and their subtasks"
+      "description": "Tasks of a project of the active organization"
+    },
+    {
+      "name": "subtasks",
+      "description": "Subtasks of a task, assigned to individual members of its team"
     },
     {
       "name": "time-entries",
@@ -8148,7 +8152,7 @@
           "planId"
         ]
       },
-      "TenantResponseDto": {
+      "SubscriptionResponseDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -8242,7 +8246,7 @@
         "type": "object",
         "properties": {
           "subscription": {
-            "$ref": "#/components/schemas/TenantResponseDto"
+            "$ref": "#/components/schemas/SubscriptionResponseDto"
           },
           "usage": {
             "description": "Current usage against plan limits",
@@ -8262,11 +8266,11 @@
           "message"
         ]
       },
-      "SubscriptionResponseDto": {
+      "SubscriptionWithUsageDto": {
         "type": "object",
         "properties": {
           "subscription": {
-            "$ref": "#/components/schemas/TenantResponseDto"
+            "$ref": "#/components/schemas/SubscriptionResponseDto"
           },
           "usage": {
             "description": "Current usage against plan limits",
@@ -9985,6 +9989,18 @@
             "nullable": true
           }
         }
+      },
+      "SubtaskMessageResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Subtask deleted"
+          }
+        },
+        "required": [
+          "message"
+        ]
       },
       "CreateTimeEntryDto": {
         "type": "object",
