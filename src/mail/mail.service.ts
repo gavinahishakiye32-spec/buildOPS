@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 
+import { API_PREFIX } from '../bootstrap.js';
 import type { SendEmailInput } from './mail.constants.js';
 
 @Injectable()
@@ -43,7 +44,7 @@ export class MailService {
     email: string,
     token: string,
   ): Promise<void> {
-    const link = `${this.baseUrl}/auth/verify-email?token=${token}`;
+    const link = `${this.baseUrl}/${API_PREFIX}/auth/verify-email?token=${token}`;
 
     await this.send({
       to: email,
@@ -59,7 +60,7 @@ export class MailService {
     email: string,
     token: string,
   ): Promise<void> {
-    const link = `${this.baseUrl}/auth/reset-password?token=${token}`;
+    const link = `${this.baseUrl}/${API_PREFIX}/auth/reset-password?token=${token}`;
 
     await this.send({
       to: email,
