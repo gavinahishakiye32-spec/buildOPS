@@ -10,7 +10,7 @@ Multi-tenant operations platform for clients, projects, teams, tasks, subtasks, 
 | **Status** | MVP **step 1 of 13** complete — Authentication (see [Implementation status](#implementation-status)) |
 | **Baseline spec** | [`docs/specification.md`](docs/specification.md) — original, verbatim (never lost) |
 | **Database** | [`schema.sql`](schema.sql) — authoritative for migrations/DDL |
-| **API docs** | Swagger UI `/api` · OpenAPI JSON `/api-json` |
+| **API docs** | Swagger UI `/api/v1/docs` · OpenAPI JSON `/api/v1/docs-json` |
 
 > **Rule of precedence:** where the baseline spec and this README disagree, **this README
 > (Corrections & decisions) is authoritative**, and for DDL, **`schema.sql` is authoritative**.
@@ -291,7 +291,11 @@ npm run start:prod     # production → node dist/main
 npm run lint           # oxlint
 ```
 
-Swagger UI: `http://localhost:3000/api` · OpenAPI JSON: `http://localhost:3000/api-json`
+Swagger UI: `http://localhost:3000/api/v1/docs` · OpenAPI JSON: `http://localhost:3000/api/v1/docs-json`
+
+**Every endpoint is served under the `/api/v1` prefix.** A frontend should set its base URL once
+(`http://localhost:3000/api/v1`) and then call paths relative to it, e.g. `/auth/login`,
+`/dashboard/overview`. The tables below list paths without the prefix for readability.
 
 > In non-production, TypeORM `synchronize` is enabled as a convenience. **`schema.sql` remains
 > the source of truth for production migrations.**
@@ -308,7 +312,7 @@ npm run test:cov   # coverage
 
 Current: **45 unit tests**, **24 e2e tests** — all passing.
 
-- `test/swagger.e2e-spec.ts` — boots the app with mocked services, asserts `/api-json` documents
+- `test/swagger.e2e-spec.ts` — boots the app with mocked services, asserts `/api/v1/docs-json` documents
   every endpoint with the **exact** status codes and DTO schemas, then exercises each endpoint
   against the real implementation.
 - `test/app.e2e-spec.ts` — root route smoke test (needs reachable PostgreSQL).
