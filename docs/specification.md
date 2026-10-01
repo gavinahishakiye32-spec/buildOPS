@@ -2,7 +2,9 @@
 
 > Archived baseline. This file is the original specification, kept verbatim so no requirement is
 > ever lost. Where the implementation deviates or adds information, the authoritative record is
-> `README.md` → "Corrections & decisions" and, for the database, `schema.sql`.
+> `docs/frontend-guide.md` → §9 "Endpoint reference" and §12 "Known limitations", and, for the
+> database, `schema.sql`. The machine-readable contract is `docs/openapi.json` (regenerate with
+> `npm run docs:openapi`).
 
 ## 1. Product Overview
 
