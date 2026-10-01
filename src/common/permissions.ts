@@ -74,7 +74,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     key: 'owner',
     name: 'Owner',
     description:
-      'Tenant creator. Full access to every resource in the organization.',
+      'Subscription creator. Full access to every resource in the organization.',
     permissions: ALL_PERMISSIONS,
   },
   {

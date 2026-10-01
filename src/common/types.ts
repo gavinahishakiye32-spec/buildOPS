@@ -13,7 +13,7 @@ export interface AuthenticatedUser {
 
 /**
  * Resolved authorization context (spec §5/§15):
- * `Authentication → Tenant context → Organization context → Role/Permissions`.
+ * `Authentication → Subscription context → Organization context → Role/Permissions`.
  */
 export interface AuthContext {
   userId: string;

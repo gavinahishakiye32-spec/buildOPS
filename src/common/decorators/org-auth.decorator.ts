@@ -12,7 +12,7 @@ export interface OrganizationAuthContext extends AuthContext {
 
 /**
  * Injects the authorization context and guarantees an organization is active.
- * Use on every organization-scoped route; use `@Auth()` for tenant-level routes.
+ * Use on every organization-scoped route; use `@Auth()` for subscription-level routes.
  */
 export const OrgAuth = createParamDecorator(
   (_data: unknown, ctx: ExecutionContext): OrganizationAuthContext => {

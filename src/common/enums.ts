@@ -14,7 +14,7 @@ export function isSelfEditableStatus(value: string): boolean {
   return (SELF_EDITABLE_USER_STATUSES as readonly string[]).includes(value);
 }
 
-export const TENANT_STATUSES = [
+export const SUBSCRIPTION_STATUSES = [
   'trial',
   'active',
   'cancelled',

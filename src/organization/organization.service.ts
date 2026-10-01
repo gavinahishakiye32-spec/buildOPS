@@ -12,7 +12,7 @@ import {
   type PaginationQueryDto,
 } from '../common/pagination.dto.js';
 import { RoleService } from '../role/role.service.js';
-import { TenantService } from '../tenant/tenant.service.js';
+import { SubscriptionService } from '../subscription/subscription.service.js';
 import { Organization } from './organization.entity.js';
 import {
   CreateOrganizationDto,
@@ -20,7 +20,7 @@ import {
 } from './dto/organization.dto.js';
 
 /**
- * Organizations are the tenant workspace (spec §4.3). Creation is bounded by
+ * Organizations are the subscription workspace (spec §4.3). Creation is bounded by
  * the plan limit and the creator receives the Owner role so the organization is
  * administrable immediately (spec §6, §14).
  */
@@ -29,7 +29,7 @@ export class OrganizationService {
   constructor(
     @InjectRepository(Organization)
     private readonly organizationRepo: Repository<Organization>,
-    private readonly tenantService: TenantService,
+    private readonly subscriptionService: SubscriptionService,
     private readonly roleService: RoleService,
   ) {}
 
@@ -37,11 +37,11 @@ export class OrganizationService {
     userId: string,
     query: PaginationQueryDto,
   ): Promise<Paginated<Organization>> {
-    const tenant = await this.tenantService.requireForUser(userId);
+    const subscription = await this.subscriptionService.requireForUser(userId);
     const { page, limit, skip } = resolvePage(query);
 
     const [items, total] = await this.organizationRepo.findAndCount({
-      where: { tenantId: tenant.id },
+      where: { tenantId: subscription.id },
       order: { createdAt: 'DESC' },
       skip,
       take: limit,
@@ -66,8 +66,11 @@ export class OrganizationService {
     userId: string,
     dto: CreateOrganizationDto,
   ): Promise<Organization> {
-    const tenant = await this.tenantService.requireForUser(userId);
-    await this.tenantService.assertCanConsume(tenant, 'organizations');
+    const subscription = await this.subscriptionService.requireForUser(userId);
+    await this.subscriptionService.assertCanConsume(
+      subscription,
+      'organizations',
+    );
 
     const name = dto.name.trim();
     if (!name) {
@@ -76,7 +79,7 @@ export class OrganizationService {
 
     const organization = await this.organizationRepo.save(
       this.organizationRepo.create({
-        tenantId: tenant.id,
+        tenantId: subscription.id,
         name,
         status: dto.status ?? 'active',
       }),
