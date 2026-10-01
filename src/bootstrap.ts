@@ -3,45 +3,30 @@ import type { INestApplication } from '@nestjs/common';
 import helmet from 'helmet';
 
 /**
- * Origins allowed in development when `ALLOWED_ORIGINS` is unset. Covers the
- * usual Vite/Next/CRA dev servers so a frontend can call the API without extra
- * setup on a fresh clone.
- */
-const DEV_ORIGINS = [
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:4200',
-];
-
-/**
  * Resolve the CORS allow-list.
  *
- * Fails closed in production: with no `ALLOWED_ORIGINS` configured, no
- * cross-origin request is granted rather than falling back to the dev origins.
+ * Defaults to permitting any origin so a frontend on any host (Vite dev
+ * server, LAN address, preview deploy, ngrok tunnel) can call the API without
+ * configuration. Set `ALLOWED_ORIGINS` to a comma-separated list to restrict it
+ * to known frontends later.
  */
-export function resolveAllowedOrigins(): string[] {
+export function resolveAllowedOrigins(): string[] | true {
   const raw = process.env.ALLOWED_ORIGINS?.trim();
 
-  if (raw) {
-    const origins = raw
-      .split(',')
-      .map((origin) => origin.trim().replace(/\/+$/, ''))
-      .filter(Boolean);
-
-    if (origins.includes('*')) {
-      return ['*'];
-    }
-
-    return origins;
+  if (!raw) {
+    return true;
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    return [];
+  const origins = raw
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  if (origins.length === 0 || origins.includes('*')) {
+    return true;
   }
 
-  return DEV_ORIGINS;
+  return origins;
 }
 
 /**
@@ -53,10 +38,10 @@ export function configureApp(app: INestApplication): INestApplication {
 
   app.use(helmet());
   app.enableCors({
-    origin: origins.length === 1 && origins[0] === '*' ? true : origins,
-    // Auth is stateless Bearer JWT, so the browser need not send cookies.
-    // Left off deliberately: enabling it would make the API CSRF-reachable
-    // once cookie-based refresh tokens are added.
+    origin: origins,
+    // Auth is stateless Bearer JWT, so the browser never needs to send cookies.
+    // Left off deliberately: enabling it would make the API CSRF-reachable once
+    // cookie-based refresh tokens are introduced.
     credentials: false,
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -73,10 +58,8 @@ export function configureApp(app: INestApplication): INestApplication {
   );
   app.enableShutdownHooks();
 
-  if (origins.length === 0) {
-    console.warn(
-      '[bootstrap] ALLOWED_ORIGINS is unset in production; all cross-origin requests will be rejected.',
-    );
+  if (origins === true) {
+    console.log('[bootstrap] CORS: allowing all origins (set ALLOWED_ORIGINS to restrict)');
   } else {
     console.log(`[bootstrap] CORS allowed origins: ${origins.join(', ')}`);
   }
