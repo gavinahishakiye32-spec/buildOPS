@@ -196,7 +196,10 @@ export class RoleController {
   @Get('roles/:roleId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.ROLE_VIEW)
-  @ApiOperation({ summary: 'Get a role' })
+  @ApiOperation({
+    summary: 'Get a role',
+    description: 'One role of the organization with its attached permissions.',
+  })
   @ApiResponse({ status: 200, type: RoleResponseDto })
   @ApiErrors(403, 404)
   async findRole(
@@ -210,7 +213,11 @@ export class RoleController {
   @Patch('roles/:roleId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.ROLE_UPDATE)
-  @ApiOperation({ summary: 'Update a role' })
+  @ApiOperation({
+    summary: 'Update a role',
+    description:
+      'Renames a role or updates its description. Replace the permission set with PUT /organizations/{organizationId}/roles/{roleId}/permissions.',
+  })
   @ApiResponse({ status: 200, type: RoleResponseDto })
   @ApiErrors(403, 404)
   async updateRole(

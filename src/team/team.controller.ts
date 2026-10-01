@@ -66,7 +66,10 @@ export class TeamController {
   @Get()
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TEAM_VIEW)
-  @ApiOperation({ summary: 'List teams' })
+  @ApiOperation({
+    summary: 'List teams',
+    description: 'Paginated teams of the active organization.',
+  })
   @ApiResponse({ status: 200, type: TeamPageDto })
   @ApiErrors(403)
   async list(
@@ -80,7 +83,10 @@ export class TeamController {
   @Get(':teamId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TEAM_VIEW)
-  @ApiOperation({ summary: 'Get a team' })
+  @ApiOperation({
+    summary: 'Get a team',
+    description: 'One team of the active organization.',
+  })
   @ApiResponse({ status: 200, type: TeamResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -94,7 +100,10 @@ export class TeamController {
   @Patch(':teamId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TEAM_UPDATE)
-  @ApiOperation({ summary: 'Update a team' })
+  @ApiOperation({
+    summary: 'Update a team',
+    description: 'Renames a team or updates its description and status.',
+  })
   @ApiResponse({ status: 200, type: TeamResponseDto })
   @ApiErrors(400, 403, 404)
   async update(
@@ -201,7 +210,11 @@ export class TeamController {
   @HttpCode(200)
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TEAM_MEMBER_REMOVE)
-  @ApiOperation({ summary: 'Remove a team member' })
+  @ApiOperation({
+    summary: 'Remove a team member',
+    description:
+      'Removes a membership from a team. The user keeps their organization access and their assigned tasks.',
+  })
   @ApiResponse({ status: 200, type: TeamMessageResponseDto })
   @ApiErrors(403, 404)
   async removeMember(
