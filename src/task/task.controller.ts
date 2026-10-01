@@ -91,7 +91,11 @@ export class TaskController {
   @Get(':taskId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TASK_VIEW)
-  @ApiOperation({ summary: 'Get a task' })
+  @ApiOperation({
+    summary: 'Get a task',
+    description:
+      'One task of the active organization, with its project, team and badge references.',
+  })
   @ApiResponse({ status: 200, type: TaskResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -194,7 +198,10 @@ export class TaskController {
   @Get(':taskId/subtasks/:subtaskId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.SUBTASK_VIEW)
-  @ApiOperation({ summary: 'Get a subtask' })
+  @ApiOperation({
+    summary: 'Get a subtask',
+    description: 'One subtask of a task of the active organization.',
+  })
   @ApiResponse({ status: 200, type: SubtaskResponseDto })
   @ApiErrors(403, 404)
   async findSubtask(

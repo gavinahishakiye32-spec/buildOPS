@@ -83,7 +83,11 @@ export class ProjectController {
   @Get(':projectId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.PROJECT_VIEW)
-  @ApiOperation({ summary: 'Get a project' })
+  @ApiOperation({
+    summary: 'Get a project',
+    description:
+      'One project of the active organization, with its client reference when linked to a client.',
+  })
   @ApiResponse({ status: 200, type: ProjectResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -100,7 +104,11 @@ export class ProjectController {
   @Patch(':projectId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.PROJECT_UPDATE)
-  @ApiOperation({ summary: 'Update a project' })
+  @ApiOperation({
+    summary: 'Update a project',
+    description:
+      'Updates name, description, client link, status, dates and budget. Only fields you send are modified, and startDate must stay before or equal to endDate.',
+  })
   @ApiResponse({ status: 200, type: ProjectResponseDto })
   @ApiErrors(400, 403, 404)
   async update(

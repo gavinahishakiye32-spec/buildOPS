@@ -1,18 +1,90 @@
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { INestApplication } from '@nestjs/common';
+import { API_PREFIX } from './bootstrap.js';
+
+/**
+ * Every tag of the API with the summary shown above its group in Swagger UI.
+ * Kept here so the grouping stays in one place instead of being spread over the
+ * thirteen controllers.
+ */
+const TAGS: [name: string, description: string][] = [
+  ['auth', 'Registration, email verification, login, password reset, profile'],
+  ['plans', 'Public catalogue of subscription plans and their capacity limits'],
+  [
+    'subscription',
+    'The tenant subscription of the authenticated user: plan, status and usage',
+  ],
+  ['organizations', 'Organization CRUD within the tenant subscription'],
+  [
+    'roles',
+    'Role definitions, role assignments, members and the permission catalogue',
+  ],
+  ['teams', 'Teams and their memberships'],
+  ['clients', 'CRM client records of the active organization'],
+  ['projects', 'Projects, optionally attached to a client'],
+  ['badges', 'Task classification badges'],
+  ['tasks', 'Tasks and their subtasks'],
+  ['time-entries', 'Manual time entries and the timer lifecycle'],
+  [
+    'time-complexity',
+    'Time-complexity envelopes per task or subtask, and their variance',
+  ],
+  [
+    'dashboard',
+    'Aggregated counts, time totals, estimation variance and overdue subtasks',
+  ],
+];
+
+const DESCRIPTION = [
+  'Multi-tenant operations API: authentication, subscription plans,',
+  'organizations with role-based permissions, teams, clients, projects, tasks,',
+  'subtasks, time tracking and time-complexity estimation.',
+  '',
+  'Authentication is a stateless bearer JWT sent in the `Authorization` header.',
+  'Organization-scoped routes additionally require the active organization in the',
+  '`x-organization-id` header, or in an `:organizationId` path segment, which',
+  'takes precedence when both are sent; your membership in that organization is',
+  'verified on every call and the permissions of your role decide what is allowed.',
+  '',
+  'Record collections are paginated with the `page` and `limit` query parameters',
+  'and wrapped as `{ items, total, page, limit }`. A few catalogue endpoints',
+  '(`/plans`, `/subscription/usage`, roles, role templates, members, team members',
+  'and time-complexity variance) answer with a plain JSON array instead.',
+  '',
+  'Every response body is JSON, errors included: errors carry a `statusCode`, a',
+  '`message` and a `path`, and list `error` when several fields are invalid.',
+].join('\n');
 
 export function setupSwagger(app: INestApplication): void {
+  const port = process.env.PORT ?? '3000';
+
   const config = new DocumentBuilder()
     .setTitle('OPS API')
-    .setDescription(
-      'User management and authentication API. ' +
-        'Emails are not actually sent: every verification/reset link (with its raw token) is printed to the server console.',
-    )
+    .setDescription(DESCRIPTION)
     .setVersion('1.0')
-    .addTag('auth', 'Authentication & user verification')
-    .addBearerAuth()
-    .build();
+    // Paths in this document are relative to the prefix, so the server URL has
+    // to carry it for "Try it out" and generated clients to reach real routes.
+    .addServer(`http://localhost:${port}/${API_PREFIX}`, 'Local development');
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/v1/docs', app, document, { raw: ['json'] });
+  for (const [name, description] of TAGS) {
+    config.addTag(name, description);
+  }
+
+  config.addBearerAuth(
+    { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+    'bearer',
+  );
+
+  const document = SwaggerModule.createDocument(app, config.build());
+
+  // The builder always emits an empty contact object; drop it instead of
+  // shipping a meaningless one in the document.
+  if (
+    document.info.contact &&
+    Object.keys(document.info.contact).length === 0
+  ) {
+    delete document.info.contact;
+  }
+
+  SwaggerModule.setup(`${API_PREFIX}/docs`, app, document, { raw: ['json'] });
 }

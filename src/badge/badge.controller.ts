@@ -64,7 +64,11 @@ export class BadgeController {
   @Get()
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.BADGE_VIEW)
-  @ApiOperation({ summary: 'List badges' })
+  @ApiOperation({
+    summary: 'List badges',
+    description:
+      'Paginated task classification badges of the active organization.',
+  })
   @ApiResponse({ status: 200, type: BadgePageDto })
   @ApiErrors(403)
   async list(
@@ -78,7 +82,10 @@ export class BadgeController {
   @Get(':badgeId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.BADGE_VIEW)
-  @ApiOperation({ summary: 'Get a badge' })
+  @ApiOperation({
+    summary: 'Get a badge',
+    description: 'One badge of the active organization.',
+  })
   @ApiResponse({ status: 200, type: BadgeResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -92,7 +99,10 @@ export class BadgeController {
   @Patch(':badgeId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.BADGE_UPDATE)
-  @ApiOperation({ summary: 'Update a badge' })
+  @ApiOperation({
+    summary: 'Update a badge',
+    description: 'Renames a badge or updates its description, color and icon.',
+  })
   @ApiResponse({ status: 200, type: BadgeResponseDto })
   @ApiErrors(400, 403, 404)
   async update(

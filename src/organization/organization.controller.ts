@@ -88,7 +88,11 @@ export class OrganizationController {
   @Get(':organizationId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.ORGANIZATION_VIEW)
-  @ApiOperation({ summary: 'Get an organization' })
+  @ApiOperation({
+    summary: 'Get an organization',
+    description:
+      'One organization of the subscription. The :organizationId path segment defines the active organization for this call; your membership in it is verified.',
+  })
   @ApiResponse({ status: 200, type: OrganizationResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -102,7 +106,11 @@ export class OrganizationController {
   @Patch(':organizationId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.ORGANIZATION_UPDATE)
-  @ApiOperation({ summary: 'Update an organization' })
+  @ApiOperation({
+    summary: 'Update an organization',
+    description:
+      'Renames an organization or changes its lifecycle status. Only fields you send are modified.',
+  })
   @ApiResponse({ status: 200, type: OrganizationResponseDto })
   @ApiErrors(400, 403, 404)
   async update(

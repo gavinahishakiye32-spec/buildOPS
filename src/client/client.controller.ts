@@ -84,7 +84,10 @@ export class ClientController {
   @Get(':clientId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.CLIENT_VIEW)
-  @ApiOperation({ summary: 'Get a client' })
+  @ApiOperation({
+    summary: 'Get a client',
+    description: 'One client of the active organization.',
+  })
   @ApiResponse({ status: 200, type: ClientResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -101,7 +104,11 @@ export class ClientController {
   @Patch(':clientId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.CLIENT_UPDATE)
-  @ApiOperation({ summary: 'Update a client' })
+  @ApiOperation({
+    summary: 'Update a client',
+    description:
+      'Updates the mutable fields of a client. Only fields you send are modified, and a conflicting email returns 409.',
+  })
   @ApiResponse({ status: 200, type: ClientResponseDto })
   @ApiErrors(400, 403, 404, 409)
   async update(

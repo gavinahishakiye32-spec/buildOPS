@@ -111,7 +111,11 @@ export class TimeComplexityController {
   @Get(':complexityId')
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TIME_COMPLEXITY_VIEW)
-  @ApiOperation({ summary: 'Get a time complexity envelope' })
+  @ApiOperation({
+    summary: 'Get a time complexity envelope',
+    description:
+      'One time-complexity envelope attached to a task or subtask of the active organization.',
+  })
   @ApiResponse({ status: 200, type: TimeComplexityResponseDto })
   @ApiErrors(403, 404)
   async findOne(
@@ -151,7 +155,11 @@ export class TimeComplexityController {
   @HttpCode(200)
   @OrganizationHeader()
   @RequirePermissions(PERMISSIONS.TIME_COMPLEXITY_DELETE)
-  @ApiOperation({ summary: 'Delete a time complexity envelope' })
+  @ApiOperation({
+    summary: 'Delete a time complexity envelope',
+    description:
+      'Deletes an envelope. The parent task or subtask keeps its records, it only loses the envelope.',
+  })
   @ApiResponse({ status: 200, type: TimeComplexityMessageResponseDto })
   @ApiErrors(403, 404)
   async remove(
