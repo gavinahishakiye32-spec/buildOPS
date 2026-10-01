@@ -19,7 +19,8 @@
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:cov": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json"
+    "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
+    "docs:openapi": "NODE_OPTIONS=--experimental-vm-modules OPENAPI_WRITE=1 jest --config ./test/jest-e2e.json test/openapi-artifact.e2e-spec.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",
