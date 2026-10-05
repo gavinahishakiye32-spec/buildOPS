@@ -4735,6 +4735,270 @@ describe('published contract vs runtime (e2e)', () => {
     });
   });
 
+  describe('account', () => {
+    /**
+     * The six account routes, proved with throwaway accounts.
+     *
+     * Every credential probe here ends sessions on purpose, and the sweep at the
+     * end of this file authenticates as the owner, so none of them may run on
+     * `ownerToken`: one password change would revoke the family every later suite
+     * is holding. Each destructive probe therefore registers its own account, and
+     * each probe after a credential change starts from a fresh verified one --
+     * an account whose address has just moved is not verified, which the JWT guard
+     * refuses before the route is ever reached.
+     */
+    it('GET /settings/account returns 200 for the token owner and 401 without a token', async () => {
+      const email = 'contract-account@example.com';
+      const token = await verifiedUser(email);
+
+      const mine = await probe('get', '/settings/account', (req) =>
+        auth(token, req),
+      '200');
+      expect(mine.body).toMatchObject({
+        email,
+        isVerified: true,
+        // One login, one device: the count is devices, not tokens.
+        activeSessions: 1,
+      });
+      expect(mine.body.id).toEqual(expect.any(String));
+
+      // No `x-organization-id` anywhere in this block, which an
+      // organization-scoped route would have answered 404 to.
+      await probe('get', '/settings/account', (req) => req, '401', 'no token');
+    });
+
+    it('PATCH /settings/account/password returns 200 with the sessions ended, 400 for a wrong current password and 401 without a token', async () => {
+      const changed = await verifiedUser('contract-password@example.com');
+
+      const updated = await probe(
+        'patch',
+        '/settings/account/password',
+        (req) =>
+          auth(changed, req).send({
+            currentPassword: 'Someone123!',
+            newPassword: 'Another456!',
+          }),
+        '200',
+      );
+      // Every session went with the change, this one included, so the response is
+      // the proof rather than something the client has to go and check.
+      expect(updated.body.activeSessions).toBe(0);
+
+      const refused = await verifiedUser('contract-password-wrong@example.com');
+      await probe(
+        'patch',
+        '/settings/account/password',
+        (req) =>
+          auth(refused, req).send({
+            currentPassword: 'NotThePassword1!',
+            newPassword: 'Another456!',
+          }),
+        '400',
+        'wrong current password',
+      );
+
+      await probe(
+        'patch',
+        '/settings/account/password',
+        (req) =>
+          req.send({
+            currentPassword: 'Someone123!',
+            newPassword: 'Another456!',
+          }),
+        '401',
+        'no token',
+      );
+    });
+
+    it('PATCH /settings/account/email returns 200 with verification reset, 400, 401 and 409', async () => {
+      const moved = await verifiedUser('contract-email@example.com');
+
+      const updated = await probe(
+        'patch',
+        '/settings/account/email',
+        (req) =>
+          auth(moved, req).send({ email: 'contract-email-moved@example.com' }),
+        '200',
+      );
+      expect(updated.body.email).toBe('contract-email-moved@example.com');
+      // The move resets verification: the account has to follow the link sent to
+      // the new address before it can mint tokens again.
+      expect(updated.body.isVerified).toBe(false);
+
+      const malformed = await verifiedUser('contract-email-bad@example.com');
+      await probe(
+        'patch',
+        '/settings/account/email',
+        (req) => auth(malformed, req).send({ email: 'not-an-email' }),
+        '400',
+        'malformed address',
+      );
+
+      // The address has to belong to somebody: a second real account, since a
+      // malformed one only ever failed validation above.
+      const takenEmail = `contract-email-taken-${Date.now()}@example.com`;
+      await verifiedUser(takenEmail);
+
+      const clash = await verifiedUser('contract-email-clash@example.com');
+      await probe(
+        'patch',
+        '/settings/account/email',
+        (req) => auth(clash, req).send({ email: takenEmail }),
+        '409',
+        'address already registered',
+      );
+
+      await probe(
+        'patch',
+        '/settings/account/email',
+        (req) => req.send({ email: 'contract-email-anon@example.com' }),
+        '401',
+        'no token',
+      );
+    });
+
+    it('GET /settings/account/sessions returns 200 and 401', async () => {
+      const token = await verifiedUser('contract-sessions@example.com');
+
+      const sessions = await probe(
+        'get',
+        '/settings/account/sessions',
+        (req) => auth(token, req),
+        '200',
+      );
+      expect(sessions.body).toHaveLength(1);
+      expect(sessions.body[0]).toMatchObject({ isCurrent: true });
+
+      await probe(
+        'get',
+        '/settings/account/sessions',
+        (req) => req,
+        '401',
+        'no token',
+      );
+    });
+
+    it('DELETE /settings/account/sessions/{sessionId} returns 200, 400, 401 and 404', async () => {
+      const email = 'contract-revoke@example.com';
+      const token = await verifiedUser(email);
+
+      // A second device, so the caller's own session stays live and can prove the
+      // revoke ended exactly one of the two.
+      clearThrottle();
+      const second = await request(server)
+        .post(api('/auth/login'))
+        .send({ email, password: 'Someone123!' });
+      expect(second.status).toBe(201);
+
+      const listed = await probe(
+        'get',
+        '/settings/account/sessions',
+        (req) => auth(token, req),
+        '200',
+      );
+      const notMine = listed.body.find(
+        (row: { isCurrent: boolean }) => !row.isCurrent,
+      ) as { id: string };
+      expect(notMine).toBeDefined();
+
+      const revoked = await probe(
+        'delete',
+        `/settings/account/sessions/${notMine.id}`,
+        (req) => auth(token, req),
+        '200',
+        'a live session',
+      );
+      expect(revoked.body).toEqual({ message: 'Session revoked' });
+
+      await probe(
+        'delete',
+        '/settings/account/sessions/not-a-uuid',
+        (req) => auth(token, req),
+        '400',
+        'malformed id',
+      );
+
+      await probe(
+        'delete',
+        '/settings/account/sessions/00000000-0000-4000-8000-000000000000',
+        (req) => auth(token, req),
+        '404',
+        'unknown session',
+      );
+
+      await probe(
+        'delete',
+        `/settings/account/sessions/${notMine.id}`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+    });
+
+    it('DELETE /settings/account returns 200, 400, 401 and 409', async () => {
+      const email = 'contract-delete@example.com';
+      const token = await verifiedUser(email);
+
+      const closed = await probe(
+        'delete',
+        '/settings/account',
+        (req) =>
+          auth(token, req).query({ confirm: email }).send({
+            password: 'Someone123!',
+          }),
+        '200',
+        'password and confirmation',
+      );
+      expect(closed.body).toEqual({ message: 'Account deleted' });
+
+      const unconfirmed = await verifiedUser('contract-delete-noconfirm@example.com');
+      await probe(
+        'delete',
+        '/settings/account',
+        (req) => auth(unconfirmed, req).send({ password: 'Someone123!' }),
+        '409',
+        'no confirmation',
+      );
+      await probe(
+        'delete',
+        '/settings/account',
+        (req) =>
+          auth(unconfirmed, req)
+            .query({ confirm: 'somebody-else@example.com' })
+            .send({ password: 'Someone123!' }),
+        '409',
+        'confirmation is another address',
+      );
+
+      // The password is what a leaked access token cannot produce, so a wrong one
+      // has to be refused on its own.
+      const wrongPassword = await verifiedUser(
+        'contract-delete-badpass@example.com',
+      );
+      await probe(
+        'delete',
+        '/settings/account',
+        (req) =>
+          auth(wrongPassword, req)
+            .query({ confirm: 'contract-delete-badpass@example.com' })
+            .send({ password: 'NotThePassword1!' }),
+        '400',
+        'wrong password',
+      );
+
+      await probe(
+        'delete',
+        '/settings/account',
+        (req) =>
+          req.query({ confirm: 'contract-delete-anon@example.com' }).send({
+            password: 'Someone123!',
+          }),
+        '401',
+        'no token',
+      );
+    });
+  });
+
   describe('organization teardown', () => {
     it('DELETE /organizations/{organizationId} returns 200 for a confirmed owner', async () => {
       // The only operation that tears the tenant down, so it runs after every

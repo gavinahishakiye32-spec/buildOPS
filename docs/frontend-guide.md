@@ -335,6 +335,63 @@ Changing the password or resetting it ends every session, including the one the
 change was made with — the `PATCH`/`POST` still returns its normal success
 response.
 
+### 3.8 Account
+
+Everything a person can do to their own account, in one area, for the settings
+screen. All of it authenticates on the access token alone: **no
+`x-organization-id`, no permission**, and a user who belongs to no organization
+can use every route here.
+
+| Method   | Path                                        | Body / query                    | Success                 | Errors                          |
+| -------- | ------------------------------------------- | ------------------------------- | ----------------------- | ------------------------------- |
+| `GET`    | `/settings/account`                         | —                               | `200 AccountResponseDto`| `401`                           |
+| `PATCH`  | `/settings/account/password`                | `{ currentPassword, newPassword }` | `200 AccountResponseDto` | `400`, `401`                  |
+| `PATCH`  | `/settings/account/email`                   | `{ email }`                     | `200 AccountResponseDto` | `400`, `401`, `409`            |
+| `GET`    | `/settings/account/sessions`                | —                               | `200 SessionResponseDto[]` | `401`                         |
+| `DELETE` | `/settings/account/sessions/{sessionId}`    | —                               | `200 { message }`       | `400`, `401`, `404`             |
+| `DELETE` | `/settings/account`                         | `?confirm=<email>` `{ password }` | `200 { message }`     | `400`, `401`, `409`             |
+
+`AccountResponseDto` is `{ id, email, name, status, isVerified, activeSessions,
+createdAt, updatedAt }`. One call renders the whole tab: `activeSessions` is the
+same count `sessions` would list, so the summary needs no second request.
+
+**Why these exist next to `PATCH /auth/profile`.** `/auth/profile` can change
+everything at once, which is convenient for a form that has all of it and is also
+how a client sends `password` without `currentPassword` and gets a `400`. These
+routes are one thing at a time, and the required fields cannot be forgotten.
+
+Three behaviours to code around:
+
+1. **A password change signs the user out everywhere, including the tab that made
+   it.** The `200` still arrives, reporting `activeSessions: 0`; the token in hand
+   is refused from the next request. Send the user back through `POST /auth/login`
+   with the new password rather than treating the `200` as "done, keep going".
+2. **An email change resets verification, so the current token stops working
+   immediately** (`isVerified` is `false`, and an unverified account cannot mint
+   tokens). The response says so; show "check your new inbox" and expect to be
+   signed out until the link is followed.
+3. **Session ids are session families**, stable across refreshes, which is the
+   value to send to `DELETE …/sessions/{sessionId}`. An id that is unknown,
+   expired or somebody else's is the same `404`, so a revoke button that fires
+   twice shows nothing to worry about.
+
+**Account deletion takes two independent proofs**: `password` (which a leaked
+access token cannot produce) and `?confirm=<email>`. The first attempt without the
+confirmation answers `409` and repeats the address to type, so the flow is:
+
+```ts
+const res = await deleteAccount(password);              // 409 + the address
+await deleteAccount(password, res.message);             // with ?confirm=<email>
+```
+
+What it does: every session ends, preferences are dropped, the account's role
+assignments are released (freeing its seat against the plan's `max_users`) and its
+team memberships are removed. What it deliberately leaves: the workspace, its
+organizations and everything logged under the account. Those keep pointing at the
+user id, which no longer names anybody. The address is freed for a new
+registration and the row is anonymised, so this cannot be undone — there is no
+restore, unlike the content deletes in §8.4.
+
 ---
 
 ## 4. Email deep links
@@ -656,9 +713,11 @@ A trash entry is always the same shape:
 }
 ```
 
-`deletedBy` is the user who deleted it, or `null` if that account has since been
-removed. The record itself is under `resource`, in the shape its own `GET`
-returns, so a trash row renders with the component you already have.
+`deletedBy` is the id of the user who deleted it. That account may since have
+been deleted (§3.8): the id stays, and looking it up answers `404`, so render it
+as "unknown" rather than as a broken user. The record itself is under `resource`,
+in the shape its own `GET` returns, so a trash row renders with the component you
+already have.
 
 #### Deletes that take other records with them
 
@@ -769,6 +828,12 @@ API serves but the Swagger document does not yet list.
 | `GET`    | `/subscription/usage` | —                     | `200 PlanUsageDto[]`                     | `404`               |
 | `GET`    | `/organizations`      | `?page&limit`         | `200 OrganizationPage`                   | `404`               |
 | `POST`   | `/organizations`      | `{ name, status? }`   | `201 OrganizationResponseDto`            | `400`, `404`        |
+| `GET`    | `/settings/account`   | —                     | `200 AccountResponseDto`                 | `401`               |
+| `PATCH`  | `/settings/account/password` | `{ currentPassword, newPassword }` | `200 AccountResponseDto`   | `400`, `401`        |
+| `PATCH`  | `/settings/account/email` | `{ email }`       | `200 AccountResponseDto`                 | `400`, `401`, `409` |
+| `GET`    | `/settings/account/sessions` | —                | `200 SessionResponseDto[]`               | `401`               |
+| `DELETE` | `/settings/account/sessions/{sessionId}` | —    | `200 { message }`                        | `400`, `401`, `404` |
+| `DELETE` | `/settings/account` `?confirm=<email>` | `{ password }` | `200 { message }`                     | `400`, `401`, `409` |
 
 `status` on subscribe accepts `trial | active | cancelled | suspended`; it
 defaults to `active`.
@@ -1090,6 +1155,7 @@ tasks, and `0` on `/dashboard/overview` when the organization has no tasks.
 - [ ] Verification page reads `?token=` and calls `GET /auth/verify-email`; treats `Email already verified` as success
 - [ ] Reset page reads `?token=` from its **own** route and POSTs to `/auth/reset-password`; never GETs the emailed URL
 - [ ] Password inputs validated with `^(?=.*[A-Za-z])(?=.*\d).{8,128}$` before submit
+- [ ] Password change and email change both re-authenticate the user afterwards: both end the token in hand (§3.8)
 - [ ] `403 Missing required permission` → hide/disable the control, do not retry
 - [ ] `404` mentioning `x-organization-id` → switch organization, not an empty-state message
 - [ ] `409` on `POST /subscription` → route the user to plan change (`PATCH /subscription/plan`)

@@ -43,6 +43,17 @@ import { SessionCookies } from './session-cookies.js';
     // through @Protected() without importing JwtModule/PassportModule itself.
     JwtAuthGuard,
   ],
-  exports: [JwtAuthGuard, JwtModule, PassportModule, SessionService],
+  exports: [
+    JwtAuthGuard,
+    JwtModule,
+    PassportModule,
+    SessionService,
+    // Exported for `AccountService`, which owns the `/settings/account` surface
+    // and delegates the credential rules here rather than restating them: a
+    // password change has to re-check the current password and end every
+    // session, and an address change has to reset verification. One
+    // implementation of those is the whole point.
+    AuthService,
+  ],
 })
 export class AuthModule {}

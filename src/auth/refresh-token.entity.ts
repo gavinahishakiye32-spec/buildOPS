@@ -92,4 +92,8 @@ export type RefreshTokenRevocationReason =
   /** A password change or reset: a compromise has to be able to cut the attacker off. */
   | 'password_changed'
   /** A revoked token was presented again, so the whole family is assumed stolen. */
-  | 'reuse_detected';
+  | 'reuse_detected'
+  /** The owner ended one session from the sessions list, by id. */
+  | 'session_revoked'
+  /** The account itself was deleted, so every session it had is over. */
+  | 'account_deleted';

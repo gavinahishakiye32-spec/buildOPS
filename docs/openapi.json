@@ -10722,6 +10722,462 @@
           "settings.update"
         ]
       }
+    },
+    "/settings/account": {
+      "get": {
+        "description": "The account behind the presented token: its address, name, status, whether the address is confirmed, and how many devices are signed in. Enough to render an account tab without a second call.",
+        "operationId": "AccountController_getAccount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The authenticated account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get my account",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      },
+      "delete": {
+        "description": "Closes the account for good: every session is ended, the preferences are dropped, the organization memberships are released, and the address, name and password are overwritten. The address becomes free for a new registration. The row itself stays, because a hard delete would cascade through `tenants` and take the whole workspace with it; the work logged under the account keeps pointing at the id it always pointed at, and no longer names anybody.\n\nTwo things are required: `password`, which proves the caller owns the account, and `?confirm=<email>`, which makes the request deliberate. The first attempt answers 409 and repeats the address to type.\n\nThis is the authenticated user's own account, so it takes no `x-organization-id` and no permission.",
+        "operationId": "AccountController_deleteAccount",
+        "parameters": [
+          {
+            "name": "confirm",
+            "required": true,
+            "in": "query",
+            "description": "The address on the account, repeated back to confirm the deletion is deliberate. Anything else is a 409.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account is deleted and its sessions are ended",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete my account",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      }
+    },
+    "/settings/account/password": {
+      "patch": {
+        "description": "Replaces the password after re-checking the current one. Every session is ended by the change, the one making it included, so the access token in hand stops being accepted from the next request onwards and the response reports `activeSessions: 0`. Log in again to continue.",
+        "operationId": "AccountController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account as updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change my password",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      }
+    },
+    "/settings/account/email": {
+      "patch": {
+        "description": "Moves the account to another address. Verification is reset and a fresh link is sent there, so the response reports `isVerified: false` and the account cannot be signed into again until the link is followed.",
+        "operationId": "AccountController_changeEmail",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeEmailDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account as updated, with verification reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Change my email address",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      }
+    },
+    "/settings/account/sessions": {
+      "get": {
+        "description": "Every device currently signed in, newest first, with `isCurrent` marking the one making this request. Revoked and expired sessions are omitted.",
+        "operationId": "AccountController_sessions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Live sessions, one per device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SessionResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the sessions of my account",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      }
+    },
+    "/settings/account/sessions/{sessionId}": {
+      "delete": {
+        "description": "Revokes one session by the id the list returns, which is the `sid` claim of its access tokens. The tokens already issued stop being accepted immediately, on this device as much as any other. An id that is unknown, expired or somebody else's is the same 404, so this route cannot be used to probe for other people's sessions.",
+        "operationId": "AccountController_revokeSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session was live and is now revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token\n\nMissing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "End one of my sessions",
+        "tags": [
+          "settings"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "user"
+        },
+        "x-organization-context": {
+          "required": false
+        }
+      }
     }
   },
   "info": {
@@ -10788,7 +11244,7 @@
     },
     {
       "name": "settings",
-      "description": "Personal preferences of the authenticated user, and the settings shared by an organization"
+      "description": "Personal preferences of the authenticated user, the settings shared by an organization, and the account itself: credentials, sessions and deletion"
     }
   ],
   "servers": [
@@ -14240,6 +14696,106 @@
             "description": "End of the working day in minutes from midnight (17:00 is 1020). Must be later than the start; sending a window that ends before it starts is refused with 400."
           }
         }
+      },
+      "AccountResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "9a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d"
+          },
+          "email": {
+            "type": "string",
+            "example": "someone@example.com"
+          },
+          "name": {
+            "type": "string",
+            "example": "Someone",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "example": "active",
+            "nullable": true,
+            "description": "Account status. A member may set `active` or `inactive` on their own profile; `suspended` is reachable only by somebody with `member.update`."
+          },
+          "isVerified": {
+            "type": "boolean",
+            "example": true,
+            "description": "Whether the address is confirmed. Goes back to false after an email change, until the new link is followed."
+          },
+          "activeSessions": {
+            "type": "number",
+            "example": 2,
+            "description": "Live sessions, one per device. The same rows `GET /settings/account/sessions` returns."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-18T11:11:22.041Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-18T11:29:09.099Z"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "name",
+          "status",
+          "isVerified",
+          "activeSessions",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ChangePasswordDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "example": "Someone123!",
+            "description": "The password currently on the account."
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "BrandNew456!",
+            "description": "The replacement. At least 8 characters with at least one letter and one number. Every session is ended by the change, including the one making it."
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ]
+      },
+      "ChangeEmailDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "new.address@example.com",
+            "description": "Stored normalised, so the address is compared the same way the login is."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "DeleteAccountDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "example": "Someone123!",
+            "description": "The password on the account, asked for again to confirm."
+          }
+        },
+        "required": [
+          "password"
+        ]
       }
     }
   }

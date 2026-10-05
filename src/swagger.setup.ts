@@ -27,7 +27,7 @@ const TAGS: [name: string, description: string][] = [
   ['dashboard', 'Dashboard metrics and summaries'],
   [
     'settings',
-    'Personal preferences of the authenticated user, and the settings shared by an organization',
+    'Personal preferences of the authenticated user, the settings shared by an organization, and the account itself: credentials, sessions and deletion',
   ],
 ];
 

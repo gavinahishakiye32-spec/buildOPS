@@ -171,6 +171,15 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['PATCH', '/settings/me', ['200']],
   ['GET', '/settings/organization', ['200']],
   ['PATCH', '/settings/organization', ['200']],
+  // The account surface, which belongs to the person rather than to any
+  // organization: a token is enough, so none of these take a bearer-plus-org
+  // combination and none of them publish a 403 or a 404 for a missing context.
+  ['GET', '/settings/account', ['200']],
+  ['PATCH', '/settings/account/password', ['200']],
+  ['PATCH', '/settings/account/email', ['200']],
+  ['GET', '/settings/account/sessions', ['200']],
+  ['DELETE', '/settings/account/sessions/{sessionId}', ['200']],
+  ['DELETE', '/settings/account', ['200']],
   ['GET', '/dashboard/projects', ['200']],
   ['GET', '/dashboard/clients', ['200']],
   ['GET', '/dashboard/overdue', ['200']],

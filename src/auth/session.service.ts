@@ -259,6 +259,33 @@ export class SessionService {
     return result.affected ?? 0;
   }
 
+  /**
+   * Revokes one session of one user, and reports whether it was live.
+   *
+   * Scoped to `userId` as well as `familyId` on purpose: the id comes from the
+   * caller's own sessions list, but nothing about a request body or a path
+   * segment can be treated as belonging to the caller, and a family id is
+   * guessable enough that updating on it alone would let one user sign another
+   * out. A `false` here covers both "no such family" and "not yours" -- the two
+   * have to be indistinguishable to a caller probing for other people's session
+   * ids, and the sessions list already distinguishes them by not containing them.
+   *
+   * Revoked rows are not re-revoked: an expired family reads the same as a
+   * revoked one, which keeps the route idempotent.
+   */
+  async revokeFamilyForUser(
+    familyId: string,
+    userId: string,
+    reason: RefreshTokenRevocationReason,
+  ): Promise<boolean> {
+    const result = await this.refreshTokens.update(
+      { familyId, userId, revokedAt: IsNull(), expiresAt: MoreThan(new Date()) },
+      { revokedAt: new Date(), revokedReason: reason },
+    );
+
+    return (result.affected ?? 0) > 0;
+  }
+
   private async revokeFamily(
     familyId: string,
     userId: string,

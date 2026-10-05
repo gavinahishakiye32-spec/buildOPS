@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   BeforeInsert,
   BeforeUpdate,
 } from 'typeorm';
@@ -59,6 +60,24 @@ export class User {
   @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
+  /**
+   * Set when the account was deleted, `null` while it is live.
+   *
+   * Declared as a `@DeleteDateColumn` for the same reason `Client.deletedAt` is:
+   * the filter it turns on (`deleted_at IS NULL` on every `find`, `findOne` and
+   * `count`, plus every joined alias of a query builder) is what makes a deleted
+   * account disappear from the API without a single read having been taught
+   * about it. `JwtStrategy` already refuses a token whose user cannot be
+   * resolved, so deleting an account ends its live tokens here rather than in
+   * every guard that follows.
+   *
+   * The row is deliberately kept rather than removed -- see
+   * `AccountDeletion1700000000005` for the cascade this avoids and the history it
+   * preserves.
+   */
+  @DeleteDateColumn({ name: 'deleted_at', type: 'timestamp', nullable: true })
+  deletedAt: Date | null;
+
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
@@ -74,6 +93,7 @@ export class User {
       verificationTokenExpires: _verificationTokenExpires,
       resetToken: _resetToken,
       resetTokenExpires: _resetTokenExpires,
+      deletedAt: _deletedAt,
       ...result
     } = this;
     return result;
