@@ -14,7 +14,8 @@ export class SubscriptionResponseDto {
 
   @ApiPropertyOptional({
     example: 'b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33',
-    description: 'Selected plan; null only before the first subscription',
+    description:
+      'Plan in force. Null before the first payment settles and while a plan change is still being paid for, in which case the previous plan is also null and pendingPlan names the one being bought.',
   })
   planId: string | null;
 
@@ -24,11 +25,54 @@ export class SubscriptionResponseDto {
   @ApiProperty({ enum: SUBSCRIPTION_STATUSES, example: 'active' })
   status: string;
 
+  @ApiPropertyOptional({
+    example: '2026-10-16T10:00:00.000Z',
+    description:
+      'When a trial stops granting capacity. Null unless the subscription was started as a trial.',
+  })
+  trialEndsAt: Date | null;
+
+  @ApiProperty({
+    example: false,
+    description:
+      'True once the trial has passed. A lapsed trial keeps its data and stops accepting organizations, members and projects until a plan is chosen.',
+  })
+  isTrialExpired: boolean;
+
+  @ApiPropertyOptional({
+    type: PlanResponseDto,
+    nullable: true,
+    description:
+      'Plan currently being paid for, or null when no purchase is in flight.',
+  })
+  pendingPlan: PlanResponseDto | null;
+
+  @ApiPropertyOptional({
+    example: 'sub_1234abcd',
+    nullable: true,
+    description: 'Payment provider handle for the recurring agreement',
+  })
+  billingSubscriptionRef: string | null;
+
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
   createdAt: Date;
 
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
   updatedAt: Date;
+}
+
+/** The payment state a plan change is in. */
+export class PurchaseStateDto {
+  @ApiProperty({ enum: ['pending', 'settled'], example: 'pending' })
+  status: string;
+
+  @ApiPropertyOptional({
+    example: 'https://checkout.example.com/session/cs_test_123',
+    nullable: true,
+    description:
+      'Where to complete payment. Present only while the purchase is pending.',
+  })
+  checkoutUrl: string | null;
 }
 
 export class PlanUsageDto {
@@ -59,10 +103,26 @@ export class SubscriptionWithUsageDto {
     description: 'Current usage against plan limits',
   })
   usage: PlanUsageDto[];
+
+  @ApiPropertyOptional({
+    type: PurchaseStateDto,
+    description:
+      'Payment state of the most recent plan change. Absent when the plan was not changed.',
+  })
+  purchase?: PurchaseStateDto;
 }
 
 export class SubscriptionCreatedResponseDto extends SubscriptionWithUsageDto {
   @ApiProperty({ example: 'Subscription active' })
+  message: string;
+}
+
+/**
+ * Answered with 202: the purchase was started but the money has not arrived, so
+ * `subscription.planId` still holds the plan in force before the change.
+ */
+export class PurchasePendingResponseDto extends SubscriptionWithUsageDto {
+  @ApiProperty({ example: 'Complete the payment to activate this plan' })
   message: string;
 }
 

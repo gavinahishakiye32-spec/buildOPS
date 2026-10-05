@@ -13,6 +13,7 @@ import {
 } from '../common/pagination.dto.js';
 import { RoleService } from '../role/role.service.js';
 import { SubscriptionService } from '../subscription/subscription.service.js';
+import { PlanLimitService } from '../plan-limit/plan-limit.service.js';
 import { Organization } from './organization.entity.js';
 import {
   CreateOrganizationDto,
@@ -31,6 +32,7 @@ export class OrganizationService {
     private readonly organizationRepo: Repository<Organization>,
     private readonly subscriptionService: SubscriptionService,
     private readonly roleService: RoleService,
+    private readonly planLimits: PlanLimitService,
   ) {}
 
   async listForUser(
@@ -67,27 +69,38 @@ export class OrganizationService {
     dto: CreateOrganizationDto,
   ): Promise<Organization> {
     const subscription = await this.subscriptionService.requireForUser(userId);
-    await this.subscriptionService.assertCanConsume(
-      subscription,
-      'organizations',
-    );
 
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('Organization name cannot be empty');
     }
 
-    const organization = await this.organizationRepo.save(
-      this.organizationRepo.create({
-        tenantId: subscription.id,
-        name,
-        status: dto.status ?? 'active',
-      }),
+    // The tenant row is locked for the whole operation, so the organization
+    // limit and the owner's member seat are checked and consumed atomically.
+    return this.planLimits.locked(
+      subscription.id,
+      async (limits, current) => {
+        await limits.assertCanConsume(current, 'organizations');
+
+        const organizations = limits.manager.getRepository(Organization);
+        const organization = await organizations.save(
+          organizations.create({
+            tenantId: current.id,
+            name,
+            status: dto.status ?? 'active',
+          }),
+        );
+
+        await this.roleService.bootstrapOwner(
+          organization.id,
+          userId,
+          limits,
+          current,
+        );
+
+        return organization;
+      },
     );
-
-    await this.roleService.bootstrapOwner(organization.id, userId);
-
-    return organization;
   }
 
   async update(id: string, dto: UpdateOrganizationDto): Promise<Organization> {

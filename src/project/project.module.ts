@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Client } from '../client/client.entity.js';
-import { SubscriptionModule } from '../subscription/subscription.module.js';
+import { PlanLimitModule } from '../plan-limit/plan-limit.module.js';
 import { ProjectController } from './project.controller.js';
 import { Project } from './project.entity.js';
 import { ProjectService } from './project.service.js';
@@ -13,7 +13,7 @@ import { AuthModule } from '../auth/auth.module.js';
     AuthModule,
     AuthorizationModule,
     TypeOrmModule.forFeature([Project, Client]),
-    SubscriptionModule,
+    PlanLimitModule,
   ],
   controllers: [ProjectController],
   providers: [ProjectService],

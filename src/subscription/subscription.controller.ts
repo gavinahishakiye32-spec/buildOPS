@@ -4,11 +4,13 @@ import {
   Delete,
   Get,
   HttpCode,
+  HttpStatus,
   Patch,
   Post,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
-  ApiBearerAuth,
   ApiOkResponse,
   ApiOperation,
   ApiResponse,
@@ -19,49 +21,105 @@ import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
 import { Protected } from '../common/decorators/protected.decorator.js';
 import type { AuthContext } from '../common/types.js';
 import { SubscriptionService } from './subscription.service.js';
+import type { PurchaseResult } from '../billing/billing-provider.js';
 import { ChangePlanDto, SelectPlanDto } from './dto/select-plan.dto.js';
 import {
   PlanUsageDto,
+  PurchasePendingResponseDto,
   SubscriptionCreatedResponseDto,
   SubscriptionMessageResponseDto,
   SubscriptionWithUsageDto,
 } from './dto/subscription-response.dto.js';
+import type { SubscriptionResponse } from './subscription.entity.js';
 
 @ApiTags('subscription')
-@ApiBearerAuth()
+// `@Protected()` already contributes `ApiBearerAuth`; declaring it here too
+// emitted the security requirement twice on every operation.
 @Protected()
 @SkipOrganization()
 @Controller('subscription')
 export class SubscriptionController {
   constructor(private readonly subscriptionService: SubscriptionService) {}
 
+  /**
+   * Shapes the answer from whether the money has arrived.
+   *
+   * The status code is the part of the contract a client actually branches on:
+   * 200 means the plan is in force and the usage figures are final, 202 means a
+   * purchase is outstanding and `planId` still holds the previous plan. Folding
+   * both into one 200 with a nullable field would let a client treat an unpaid
+   * Business plan as active.
+   *
+   * The code is set on the response rather than with `@HttpCode` because it
+   * depends on what the provider did: a decorator would pin one value for both
+   * branches, and the pending one would silently answer 200.
+   */
+  private respond(
+    response: Response,
+    subscription: SubscriptionResponse,
+    usage: PlanUsageDto[],
+    purchase: PurchaseResult | null,
+    message?: string,
+  ): SubscriptionWithUsageDto | PurchasePendingResponseDto {
+    if (purchase && !purchase.confirmed) {
+      response.status(HttpStatus.ACCEPTED);
+
+      return {
+        message: 'Complete the payment to activate this plan',
+        subscription,
+        usage,
+        purchase: {
+          status: 'pending',
+          checkoutUrl: purchase.checkoutUrl,
+        },
+      };
+    }
+
+    response.status(HttpStatus.OK);
+
+    return {
+      ...(message ? { message } : {}),
+      subscription,
+      usage,
+      ...(purchase
+        ? { purchase: { status: 'settled', checkoutUrl: null } }
+        : {}),
+    };
+  }
+
   @Post()
   @ApiOperation({
     summary: 'Subscribe to a plan',
     description:
-      'Creates (or reactivates) the subscription for the authenticated user and stores the selected plan. Limits are enforced from this point on: max_organizations, max_users, max_projects.',
+      'Creates (or reactivates) the subscription for the authenticated user and starts payment for the selected plan. A trial is granted immediately and expires after TRIAL_DAYS. A paid plan is applied only once payment settles: the response is 200 when it has, and 202 with a checkoutUrl to visit when it has not. Limits are enforced from that point on: max_organizations, max_users, max_projects.',
   })
   @ApiResponse({
-    status: 201,
-    description: 'Subscription active',
+    status: 200,
+    description: 'Payment settled; the plan is in force',
     type: SubscriptionCreatedResponseDto,
+  })
+  @ApiResponse({
+    status: 202,
+    description:
+      'Payment started but not settled; complete the checkout before the plan applies',
+    type: PurchasePendingResponseDto,
   })
   @ApiErrors(400, 404, 409)
   async subscribe(
     @Auth() auth: AuthContext,
     @Body() dto: SelectPlanDto,
-  ): Promise<SubscriptionCreatedResponseDto> {
-    const subscription = await this.subscriptionService.subscribe(
-      auth.userId,
-      dto,
-    );
-    const usage = await this.subscriptionService.usageSummary(subscription);
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SubscriptionWithUsageDto | PurchasePendingResponseDto> {
+    const result = await this.subscriptionService.subscribe(auth.userId, dto);
+    const { subscription, usage, purchase } = result;
 
-    return {
-      message: 'Subscription active',
-      subscription: subscription.toResponse(),
+    return this.respond(
+      response,
+      subscription.toResponse(),
       usage,
-    };
+      purchase,
+      'Subscription active',
+    );
   }
 
   @Get()
@@ -106,27 +164,31 @@ export class SubscriptionController {
   @ApiOperation({
     summary: 'Change plan',
     description:
-      'Switches the subscription to another plan. Downgrades are rejected while the current usage exceeds the target plan limits.',
+      'Starts payment for another plan. The current plan stays in force until the payment settles, so a plan is never granted without money behind it. Downgrades are rejected up front, while the current usage exceeds the target plan limits. The response is 200 when payment settled and 202 with a checkoutUrl when the customer has to complete a checkout first.',
   })
   @ApiOkResponse({
-    description: 'Subscription with the new plan',
+    description: 'Payment settled; the new plan is in force',
     type: SubscriptionWithUsageDto,
+  })
+  @ApiResponse({
+    status: 202,
+    description:
+      'Payment started but not settled; complete the checkout before the plan applies',
+    type: PurchasePendingResponseDto,
   })
   @ApiErrors(400, 404)
   async changePlan(
     @Auth() auth: AuthContext,
     @Body() dto: ChangePlanDto,
-  ): Promise<SubscriptionWithUsageDto> {
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SubscriptionWithUsageDto | PurchasePendingResponseDto> {
     const subscription = await this.subscriptionService.requireForUser(
       auth.userId,
     );
-    const updated = await this.subscriptionService.changePlan(
-      subscription,
-      dto.planId,
-    );
-    const usage = await this.subscriptionService.usageSummary(updated);
+    const { subscription: updated, usage, purchase } =
+      await this.subscriptionService.changePlan(subscription, dto.planId);
 
-    return { subscription: updated.toResponse(), usage };
+    return this.respond(response, updated.toResponse(), usage, purchase);
   }
 
   @Delete()

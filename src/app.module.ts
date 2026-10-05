@@ -10,7 +10,9 @@ import { AuthModule } from './auth/auth.module.js';
 import { ENTITIES } from './common/entities.js';
 import { MIGRATIONS } from './database/migrations.js';
 import { PlanModule } from './plan/plan.module.js';
+import { PlanLimitModule } from './plan-limit/plan-limit.module.js';
 import { SubscriptionModule } from './subscription/subscription.module.js';
+import { BillingModule } from './billing/billing.module.js';
 
 import { OrganizationModule } from './organization/organization.module.js';
 import { RoleModule } from './role/role.module.js';
@@ -67,7 +69,9 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
       inject: [ConfigService],
     }),
     AuthModule,
+    BillingModule,
     PlanModule,
+    PlanLimitModule,
     SubscriptionModule,
     OrganizationModule,
     RoleModule,

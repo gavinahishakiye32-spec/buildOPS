@@ -10,7 +10,7 @@ import {
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
-import { SubscriptionService } from '../subscription/subscription.service.js';
+import { PlanLimitService } from '../plan-limit/plan-limit.service.js';
 import { Client } from '../client/client.entity.js';
 import { Project } from './project.entity.js';
 import {
@@ -30,7 +30,7 @@ export class ProjectService {
     private readonly projectRepo: Repository<Project>,
     @InjectRepository(Client)
     private readonly clientRepo: Repository<Client>,
-    private readonly subscriptionService: SubscriptionService,
+    private readonly planLimits: PlanLimitService,
   ) {}
 
   async list(
@@ -74,23 +74,31 @@ export class ProjectService {
     dto: CreateProjectDto,
   ): Promise<Project> {
     const subscription =
-      await this.subscriptionService.requireByOrganizationId(organizationId);
-    await this.subscriptionService.assertCanConsume(subscription, 'projects');
-
+      await this.planLimits.requireByOrganizationId(organizationId);
     const clientId = await this.resolveClient(organizationId, dto.clientId);
     this.assertDateOrder(dto.startDate, dto.endDate);
 
-    return this.projectRepo.save(
-      this.projectRepo.create({
-        organizationId,
-        clientId,
-        name: dto.name.trim(),
-        description: dto.description ?? null,
-        status: dto.status ?? 'planned',
-        startDate: dto.startDate ? new Date(dto.startDate) : null,
-        endDate: dto.endDate ? new Date(dto.endDate) : null,
-        budget: dto.budget === undefined ? null : dto.budget.toFixed(2),
-      }),
+    // The tenant row is locked for the check and the insert together, so
+    // concurrent creations cannot both slip past `max_projects`.
+    return this.planLimits.locked(
+      subscription.id,
+      async (limits, current) => {
+        await limits.assertCanConsume(current, 'projects');
+
+        const projects = limits.manager.getRepository(Project);
+        return projects.save(
+          projects.create({
+            organizationId,
+            clientId,
+            name: dto.name.trim(),
+            description: dto.description ?? null,
+            status: dto.status ?? 'planned',
+            startDate: dto.startDate ? new Date(dto.startDate) : null,
+            endDate: dto.endDate ? new Date(dto.endDate) : null,
+            budget: dto.budget === undefined ? null : dto.budget.toFixed(2),
+          }),
+        );
+      },
     );
   }
 

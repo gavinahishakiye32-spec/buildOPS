@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Membership, MembershipResolver } from '../common/membership.js';
 import {
   DEFAULT_ROLE_TEMPLATES,
@@ -14,6 +14,12 @@ import {
   type PermissionName,
   type RoleTemplate,
 } from '../common/permissions.js';
+import {
+  PlanLimitService,
+  type PlanLimits,
+} from '../plan-limit/plan-limit.service.js';
+import { Subscription } from '../subscription/subscription.entity.js';
+import { User } from '../user/user.entity.js';
 import { UserService } from '../user/user.service.js';
 import { Permission } from './permission.entity.js';
 import { Role } from './role.entity.js';
@@ -37,6 +43,7 @@ export class RoleService extends MembershipResolver {
     @InjectRepository(Permission)
     private readonly permissionRepo: Repository<Permission>,
     private readonly userService: UserService,
+    private readonly planLimits: PlanLimitService,
   ) {
     super();
   }
@@ -111,13 +118,22 @@ export class RoleService extends MembershipResolver {
 
     const templateKey = dto.templateKey ?? 'viewer';
     const template = this.findTemplate(templateKey);
+    const subscription =
+      await this.planLimits.requireByOrganizationId(organizationId);
 
-    return this.assignNewRole(organizationId, {
-      name: template.name,
-      description: template.description,
-      userId: user.id,
-      permissions: template.permissions,
-    });
+    return this.planLimits.locked(subscription.id, (limits, current) =>
+      this.assignNewRole(
+        organizationId,
+        {
+          name: template.name,
+          description: template.description,
+          userId: user.id,
+          permissions: template.permissions,
+        },
+        limits,
+        current,
+      ),
+    );
   }
 
   async updateMemberRole(
@@ -173,8 +189,12 @@ export class RoleService extends MembershipResolver {
     });
   }
 
-  async findRole(organizationId: string, roleId: string): Promise<Role> {
-    const role = await this.roleRepo.findOne({
+  async findRole(
+    organizationId: string,
+    roleId: string,
+    manager?: EntityManager,
+  ): Promise<Role> {
+    const role = await this.repos(manager).roles.findOne({
       where: { id: roleId, organizationId },
       relations: { permissions: true, user: true },
     });
@@ -187,22 +207,44 @@ export class RoleService extends MembershipResolver {
   }
 
   async createRole(organizationId: string, dto: CreateRoleDto): Promise<Role> {
+    const subscription =
+      await this.planLimits.requireByOrganizationId(organizationId);
+
+    return this.planLimits.locked(subscription.id, (limits, current) =>
+      this.createRoleRow(organizationId, dto, limits, current),
+    );
+  }
+
+  private async createRoleRow(
+    organizationId: string,
+    dto: CreateRoleDto,
+    limits: PlanLimits,
+    subscription: Subscription,
+  ): Promise<Role> {
+    const roles = limits.manager.getRepository(Role);
+
     if (dto.userId) {
-      await this.assertMemberSlotFree(organizationId, dto.userId);
+      await this.assertMemberSlotFree(
+        organizationId,
+        dto.userId,
+        limits.manager,
+      );
+      await limits.assertUserSeat(subscription, dto.userId);
     }
 
     const permissions = this.validatePermissions(dto.permissions ?? []);
-    const role = this.roleRepo.create({
-      organizationId,
-      name: dto.name,
-      description: dto.description ?? null,
-      userId: dto.userId ?? null,
-    });
+    const saved = await roles.save(
+      roles.create({
+        organizationId,
+        name: dto.name,
+        description: dto.description ?? null,
+        userId: dto.userId ?? null,
+      }),
+    );
 
-    const saved = await this.roleRepo.save(role);
-    await this.replacePermissionRows(saved, permissions);
+    await this.replacePermissionRows(saved, permissions, limits.manager);
 
-    return this.findRole(organizationId, saved.id);
+    return this.findRole(organizationId, saved.id, limits.manager);
   }
 
   async updateRole(
@@ -252,15 +294,28 @@ export class RoleService extends MembershipResolver {
       );
     }
 
-    await this.assertMemberSlotFree(organizationId, dto.userId);
-    await this.assertUserExists(dto.userId);
+    const subscription =
+      await this.planLimits.requireByOrganizationId(organizationId);
 
-    role.userId = dto.userId;
-    await this.roleRepo.save(role);
+    return this.planLimits.locked(subscription.id, async (limits, current) => {
+      await this.assertMemberSlotFree(
+        organizationId,
+        dto.userId,
+        limits.manager,
+      );
+      await this.assertUserExists(dto.userId);
+      await limits.assertUserSeat(current, dto.userId);
 
-    await this.syncUserOrganization(dto.userId, organizationId);
+      role.userId = dto.userId;
+      await limits.manager.getRepository(Role).save(role);
+      await this.syncUserOrganization(
+        dto.userId,
+        organizationId,
+        limits.manager,
+      );
 
-    return this.findRole(organizationId, roleId);
+      return this.findRole(organizationId, roleId, limits.manager);
+    });
   }
 
   async unassignRole(organizationId: string, roleId: string): Promise<Role> {
@@ -281,10 +336,19 @@ export class RoleService extends MembershipResolver {
     await this.roleRepo.delete(roleId);
   }
 
-  /** Grants the subscription creator full access to a freshly created organization. */
-  async bootstrapOwner(organizationId: string, userId: string): Promise<Role> {
+  /**
+   * Grants the subscription creator full access to a freshly created
+   * organization. Runs inside the caller's tenant lock so the creator's member
+   * seat is checked and claimed atomically with the organization insert.
+   */
+  async bootstrapOwner(
+    organizationId: string,
+    userId: string,
+    limits: PlanLimits,
+    subscription: Subscription,
+  ): Promise<Role> {
     const owner = this.findTemplate('owner');
-    const existing = await this.roleRepo.findOne({
+    const existing = await limits.manager.getRepository(Role).findOne({
       where: { organizationId, userId },
     });
 
@@ -292,12 +356,17 @@ export class RoleService extends MembershipResolver {
       return existing;
     }
 
-    return this.assignNewRole(organizationId, {
-      name: owner.name,
-      description: owner.description,
-      userId,
-      permissions: owner.permissions,
-    });
+    return this.assignNewRole(
+      organizationId,
+      {
+        name: owner.name,
+        description: owner.description,
+        userId,
+        permissions: owner.permissions,
+      },
+      limits,
+      subscription,
+    );
   }
 
   // --- helpers --------------------------------------------------------------
@@ -310,12 +379,20 @@ export class RoleService extends MembershipResolver {
       userId: string;
       permissions: PermissionName[];
     },
+    limits: PlanLimits,
+    subscription: Subscription,
   ): Promise<Role> {
     await this.assertUserExists(input.userId);
-    await this.assertMemberSlotFree(organizationId, input.userId);
+    await this.assertMemberSlotFree(
+      organizationId,
+      input.userId,
+      limits.manager,
+    );
+    await limits.assertUserSeat(subscription, input.userId);
 
-    const role = await this.roleRepo.save(
-      this.roleRepo.create({
+    const roles = limits.manager.getRepository(Role);
+    const role = await roles.save(
+      roles.create({
         organizationId,
         name: input.name,
         description: input.description,
@@ -326,10 +403,15 @@ export class RoleService extends MembershipResolver {
     await this.replacePermissionRows(
       role,
       this.validatePermissions(input.permissions),
+      limits.manager,
     );
-    await this.syncUserOrganization(input.userId, organizationId);
+    await this.syncUserOrganization(
+      input.userId,
+      organizationId,
+      limits.manager,
+    );
 
-    return this.findRole(organizationId, role.id);
+    return this.findRole(organizationId, role.id, limits.manager);
   }
 
   private async assertUserExists(userId: string): Promise<void> {
@@ -344,11 +426,25 @@ export class RoleService extends MembershipResolver {
     }
   }
 
+  /**
+   * Repositories bound to the transaction manager when one is supplied, so a
+   * capacity check and the member write run on the same locked snapshot.
+   */
+  private repos(manager?: EntityManager) {
+    return {
+      roles: manager ? manager.getRepository(Role) : this.roleRepo,
+      permissions: manager
+        ? manager.getRepository(Permission)
+        : this.permissionRepo,
+    };
+  }
+
   private async assertMemberSlotFree(
     organizationId: string,
     userId: string,
+    manager?: EntityManager,
   ): Promise<void> {
-    const existing = await this.roleRepo.findOne({
+    const existing = await this.repos(manager).roles.findOne({
       where: { organizationId, userId },
     });
 
@@ -362,13 +458,15 @@ export class RoleService extends MembershipResolver {
   private async syncUserOrganization(
     userId: string,
     organizationId: string,
+    manager: EntityManager,
   ): Promise<void> {
-    const user = await this.userService.findById(userId);
+    const users = manager.getRepository(User);
+    const user = await users.findOne({ where: { id: userId } });
     if (!user) {
       throw new NotFoundException('User not found');
     }
     if (user.organizationId === null) {
-      await this.userService.updateProfile(userId, { organizationId });
+      await users.update(userId, { organizationId });
     }
   }
 
@@ -401,16 +499,18 @@ export class RoleService extends MembershipResolver {
   private async replacePermissionRows(
     role: Role,
     permissions: PermissionName[],
+    manager?: EntityManager,
   ): Promise<void> {
-    await this.permissionRepo.delete({ roleId: role.id });
+    const repo = this.repos(manager).permissions;
+    await repo.delete({ roleId: role.id });
 
     if (!permissions.length) {
       return;
     }
 
-    await this.permissionRepo.save(
+    await repo.save(
       permissions.map((name) =>
-        this.permissionRepo.create({
+        repo.create({
           roleId: role.id,
           name,
           description: this.describePermission(name),
@@ -425,8 +525,11 @@ export class RoleService extends MembershipResolver {
     return `${action.replace(/_/g, ' ')} ${resource}`.trim();
   }
 
-  private async loadRole(roleId: string): Promise<Role> {
-    const role = await this.roleRepo.findOne({
+  private async loadRole(
+    roleId: string,
+    manager?: EntityManager,
+  ): Promise<Role> {
+    const role = await this.repos(manager).roles.findOne({
       where: { id: roleId },
       relations: { permissions: true },
     });
@@ -441,8 +544,9 @@ export class RoleService extends MembershipResolver {
   private async requireRoleInOrganization(
     organizationId: string,
     roleId: string,
+    manager?: EntityManager,
   ): Promise<Role> {
-    const role = await this.roleRepo.findOne({
+    const role = await this.repos(manager).roles.findOne({
       where: { id: roleId, organizationId },
     });
 

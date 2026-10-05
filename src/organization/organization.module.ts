@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PlanLimitModule } from '../plan-limit/plan-limit.module.js';
 import { RoleModule } from '../role/role.module.js';
 import { SubscriptionModule } from '../subscription/subscription.module.js';
 import { OrganizationController } from './organization.controller.js';
@@ -14,6 +15,7 @@ import { AuthModule } from '../auth/auth.module.js';
     AuthorizationModule,
     TypeOrmModule.forFeature([Organization]),
     SubscriptionModule,
+    PlanLimitModule,
     RoleModule,
   ],
   controllers: [OrganizationController],

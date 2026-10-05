@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MembershipResolver } from '../common/membership.js';
+import { PlanLimitModule } from '../plan-limit/plan-limit.module.js';
 import { UserModule } from '../user/user.module.js';
 import { Permission } from './permission.entity.js';
 import { RoleController } from './role.controller.js';
@@ -15,6 +16,7 @@ import { AuthModule } from '../auth/auth.module.js';
     AuthModule,
     TypeOrmModule.forFeature([Role, Permission]),
     UserModule,
+    PlanLimitModule,
   ],
   controllers: [RoleController],
   providers: [

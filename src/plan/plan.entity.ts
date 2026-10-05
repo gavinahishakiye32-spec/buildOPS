@@ -32,6 +32,18 @@ export class Plan {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   price: string;
 
+  /**
+   * Identifier of this plan's recurring price inside the payment provider
+   * (a Stripe price id, a Paddle plan id). Null until a real provider is wired
+   * up.
+   *
+   * The provider is the authority on the amount: a purchase carries this
+   * reference, never the `price` column, because a price supplied by the client
+   * is a price the client chose.
+   */
+  @Column({ name: 'billing_price_ref', type: 'varchar', nullable: true })
+  billingPriceRef: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
@@ -48,6 +60,7 @@ export class Plan {
       maxStorageGb: this.maxStorageGb,
       maxOrganizations: this.maxOrganizations,
       price: this.price,
+      billingPriceRef: this.billingPriceRef,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import { DataSource } from 'typeorm';
 import { jest } from '@jest/globals';
 import request from 'supertest';
@@ -11,6 +12,7 @@ import { Project } from '../src/project/project.entity.js';
 import { Role } from '../src/role/role.entity.js';
 import { Team } from '../src/team/team.entity.js';
 import { User } from '../src/user/user.entity.js';
+import { resetDatabase } from './support/reset-database.js';
 
 /**
  * End-to-end coverage of the operational flow from spec §14 against a real
@@ -31,6 +33,10 @@ describe('BuildOps operational flow (e2e)', () => {
   let app: INestApplication;
   let server: ReturnType<INestApplication['getHttpServer']>;
   let dataSource: DataSource;
+  let throttleStorage: {
+    storage: Map<string, unknown>;
+    hitExpirations: Map<string, unknown>;
+  };
 
   const mailTokens: { verify?: string; reset?: string } = {};
   const ownerToken: string[] = [];
@@ -70,10 +76,19 @@ describe('BuildOps operational flow (e2e)', () => {
       : test;
   };
 
+  const clearThrottle = (): void => {
+    throttleStorage.storage.clear();
+    throttleStorage.hitExpirations.clear();
+  };
+
   const registerVerified = async (
     email: string,
     name: string,
   ): Promise<{ id: string; token: string }> => {
+    // The auth bucket allows 10 registrations per 15 minutes; this suite needs
+    // more than that, so each registration starts from a clean bucket.
+    clearThrottle();
+
     await request(server)
       .post(api('/auth/register'))
       .send({ email, password: 'password123', name })
@@ -119,10 +134,13 @@ describe('BuildOps operational flow (e2e)', () => {
 
     server = app.getHttpServer();
     dataSource = app.get(DataSource);
+    // The throttler registers its storage under a symbol token, not the class.
+    throttleStorage = app.get(ThrottlerStorage) as unknown as {
+      storage: Map<string, unknown>;
+      hitExpirations: Map<string, unknown>;
+    };
 
-    await dataSource.query(
-      'TRUNCATE TABLE time_entries, time_complexity, subtasks, tasks, badges, projects, clients, team_members, teams, permissions, roles, organizations, tenants, users RESTART IDENTITY CASCADE',
-    );
+    await resetDatabase(dataSource);
   });
 
   afterAll(async () => {
@@ -163,10 +181,17 @@ describe('BuildOps operational flow (e2e)', () => {
         request(server).post(api('/subscription')),
       )
         .send({ planId: starter.id })
-        .expect(201);
+        .expect(200);
 
       expect(subscription.body.subscription.plan.name).toBe('Starter');
       expect(subscription.body.subscription.status).toBe('active');
+      // The stub provider settles immediately, so the paid plan is in force by
+      // the time the response is written. The pending branch is covered in
+      // billing.e2e-spec.ts with a provider that defers.
+      expect(subscription.body.purchase).toEqual({
+        status: 'settled',
+        checkoutUrl: null,
+      });
       expect(subscription.body.usage).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ resource: 'organizations', limit: 1 }),
@@ -251,9 +276,13 @@ describe('BuildOps operational flow (e2e)', () => {
       ).expect(200);
       expect(stillThere.body.id).toBe(otherId);
 
+      // Organization deletion is permanent -- it takes the soft-deleted rows
+      // with it -- so it requires the name to be typed. See soft-delete.e2e.
       await asOwner(
         request(server).delete(api(`/organizations/${otherId}`)),
-      ).expect(200);
+      )
+        .query({ confirm: 'Second Workspace' })
+        .expect(200);
     });
   });
 
@@ -342,6 +371,160 @@ describe('BuildOps operational flow (e2e)', () => {
         .set('x-organization-id', organizationId)
         .expect(403);
     });
+
+    it('answers 400 for a non-UUID organization context instead of 500', async () => {
+      // Guards run before pipes, so `ParseUUIDPipe` never sees this value.
+      // Without the guard's own check the membership query reaches PostgreSQL
+      // and `invalid input syntax for type uuid` surfaces as a 500.
+      const malformed = await asOwner(
+        request(server).get(api('/organizations/not-a-uuid')),
+      ).expect(400);
+
+      expect(malformed.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Validation failed (uuid is expected)',
+      });
+
+      // The same value in the header, and the same value on a collection route.
+      await asOwner(request(server).get(api('/clients')))
+        .set('x-organization-id', 'not-a-uuid')
+        .expect(400);
+
+      await asOwner(request(server).get(api('/organizations')))
+        .set('x-organization-id', 'not-a-uuid')
+        .expect(200); // @SkipOrganization(): the header is ignored there.
+
+      // A well-formed UUID that simply does not exist is still a 403/404, not 400.
+      await asOwner(request(server).get(api('/clients'))).set(
+        'x-organization-id',
+        '00000000-0000-4000-8000-000000000000',
+      );
+    });
+  });
+
+  describe('plan limits', () => {
+    const planNamed = async (name: string) => {
+      const plans = await request(server).get(api('/plans')).expect(200);
+      return plans.body.find((plan: { name: string }) => plan.name === name);
+    };
+
+    const authorize = (token: string) => (req: request.Test): request.Test =>
+      req.set('Authorization', `Bearer ${token}`);
+
+    const startTenant = async (
+      email: string,
+      planName: string,
+    ): Promise<{ auth: (req: request.Test) => request.Test }> => {
+      const plan = await planNamed(planName);
+      const owner = await registerVerified(email, email);
+      const auth = authorize(owner.token);
+
+      await auth(request(server).post(api('/subscription')))
+        .send({ planId: plan.id })
+        .expect(200);
+
+      return { auth };
+    };
+
+    it('refuses to subscribe straight into a non-usable status', async () => {
+      const starter = await planNamed('Starter');
+      const user = await registerVerified('status@example.com', 'Status');
+
+      await authorize(user.token)(request(server).post(api('/subscription')))
+        .send({ planId: starter.id, status: 'cancelled' })
+        .expect(400);
+    });
+
+    it('serialises concurrent organization creation and enforces max_users', async () => {
+      const { auth } = await startTenant('limits-owner@example.com', 'Starter');
+
+      // Starter allows exactly one organization: two requests racing the same
+      // limit must resolve to one success and one plan refusal.
+      const [first, second] = await Promise.all([
+        auth(request(server).post(api('/organizations'))).send({
+          name: 'Race A',
+        }),
+        auth(request(server).post(api('/organizations'))).send({
+          name: 'Race B',
+        }),
+      ]);
+      expect([first.status, second.status].sort()).toEqual([201, 400]);
+      const organizationId = [first, second].find(
+        (response) => response.status === 201,
+      )!.body.id as string;
+
+      // Starter allows five users: the owner holds one seat, four invites fill it.
+      for (let i = 0; i < 4; i += 1) {
+        const invitee = await registerVerified(
+          `limits-${i}@example.com`,
+          `Limits ${i}`,
+        );
+        await auth(
+          request(server).post(
+            api(`/organizations/${organizationId}/members`),
+          ),
+        )
+          .send({ userId: invitee.id })
+          .expect(201);
+      }
+
+      const usage = await auth(
+        request(server).get(api('/subscription/usage')),
+      ).expect(200);
+      const seats = usage.body.find(
+        (row: { resource: string }) => row.resource === 'users',
+      );
+      expect(seats).toMatchObject({ used: 5, limit: 5, remaining: 0 });
+
+      const overflow = await registerVerified(
+        'limits-overflow@example.com',
+        'Overflow',
+      );
+      const refused = await auth(
+        request(server).post(api(`/organizations/${organizationId}/members`)),
+      )
+        .send({ userId: overflow.id })
+        .expect(400);
+      expect(refused.body.message).toContain('Plan limit reached');
+    });
+
+    it('refuses a downgrade that exceeds the target plan limits', async () => {
+      const growth = await planNamed('Growth');
+      const starter = await planNamed('Starter');
+      const owner = await registerVerified('downgrade@example.com', 'Downgrade');
+      const auth = authorize(owner.token);
+
+      await auth(request(server).post(api('/subscription')))
+        .send({ planId: growth.id })
+        .expect(200);
+      await auth(request(server).post(api('/organizations')))
+        .send({ name: 'Downgrade A' })
+        .expect(201);
+      const second = await auth(request(server).post(api('/organizations')))
+        .send({ name: 'Downgrade B' })
+        .expect(201);
+
+      // Two organizations fit Growth but not Starter, whose max is one.
+      const refused = await auth(
+        request(server).patch(api('/subscription/plan')),
+      )
+        .send({ planId: starter.id })
+        .expect(400);
+      expect(refused.body.message).toContain('Cannot switch to the Starter');
+
+      await auth(
+        request(server).delete(api(`/organizations/${second.body.id}`)),
+      )
+        .query({ confirm: 'Downgrade B' })
+        .expect(200);
+      const accepted = await auth(
+        request(server).patch(api('/subscription/plan')),
+      )
+        .send({ planId: starter.id })
+        .expect(200);
+      expect(accepted.body.subscription.plan.name).toBe('Starter');
+    });
   });
 
   describe('operational resources', () => {
@@ -406,7 +589,7 @@ describe('BuildOps operational flow (e2e)', () => {
         .post(api('/subscription'))
         .set('Authorization', otherAuth)
         .send({ planId: business.id })
-        .expect(201);
+        .expect(200);
 
       const otherOrganization = await request(server)
         .post(api('/organizations'))
