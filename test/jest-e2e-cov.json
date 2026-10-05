@@ -1,6 +1,6 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
     "^.+\\.(t|j)s$": [
@@ -17,5 +17,8 @@
   },
   "testEnvironment": "node",
   "maxWorkers": 1,
-  "setupFiles": ["<rootDir>/setup/throttler-first.mjs"]
+  "setupFiles": ["<rootDir>/test/setup/throttler-first.mjs"],
+  "collectCoverageFrom": ["src/**/*.(t|j)s"],
+  "coveragePathIgnorePatterns": ["\\.spec\\.ts$", "src/main\\.ts$"],
+  "coverageDirectory": "coverage-e2e"
 }
