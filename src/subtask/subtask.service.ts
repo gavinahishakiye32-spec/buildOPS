@@ -50,6 +50,12 @@ export class SubtaskService {
     query: SubtaskQueryDto,
   ): Promise<Paginated<Subtask>> {
     const { page, limit, skip } = resolvePage(query);
+
+    // Without this the route answers an empty page for a task that does not
+    // exist, and for one that belongs to another organization: the documented
+    // 404 is the only way a caller can tell a typo from an empty list.
+    await this.requireTask(organizationId, taskId);
+
     const qb = this.scopedQuery(organizationId, taskId);
 
     if (query.status) {
