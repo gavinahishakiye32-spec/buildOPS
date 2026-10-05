@@ -25,6 +25,10 @@ const TAGS: [name: string, description: string][] = [
   ['time-entries', 'Time entries tracking work'],
   ['time-complexity', 'Time complexity configurations'],
   ['dashboard', 'Dashboard metrics and summaries'],
+  [
+    'settings',
+    'Personal preferences of the authenticated user, and the settings shared by an organization',
+  ],
 ];
 
 const DESCRIPTION = [

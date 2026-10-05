@@ -4580,6 +4580,161 @@ describe('published contract vs runtime (e2e)', () => {
     );
   });
 
+  describe('settings', () => {
+    /**
+     * The two settings routes are proved apart because they are authenticated
+     * differently, and the difference is the point of splitting them.
+     *
+     * `/settings/me` runs the JWT guard without the organization context or the
+     * permission check: personal preferences belong to the user, so a member who
+     * has lost every role can still choose their own date format, and a user
+     * with no organization at all can still reach theirs. It therefore has no 403
+     * to prove and documents none.
+     *
+     * `/settings/organization` is organization-scoped, so it has all three: 401
+     * with no token, 404 with no organization context (the guard treats a missing
+     * header as a route that does not exist for the request), and 403 for a
+     * caller who is not a member.
+     */
+    it('GET /settings/me returns 200 for the token owner and 401 without a token', async () => {
+      const mine = await probe('get', '/settings/me', (req) =>
+        auth(ownerToken, req),
+      '200');
+      expect(mine.body.userId).toEqual(expect.any(String));
+      // Created on first read, so the response is complete rather than sparse.
+      expect(mine.body.theme).toEqual(expect.any(String));
+      expect(mine.body.locale).toEqual(expect.any(String));
+
+      await probe('get', '/settings/me', (req) => req, '401', 'no token');
+    });
+
+    it('GET /settings/me needs no organization context', async () => {
+      // No `x-organization-id` header at all, which an organization-scoped route
+      // would answer 404 to.
+      const response = await request(server)
+        .get(api('/settings/me'))
+        .set('Authorization', `Bearer ${outsiderToken}`);
+      expect(response.status).toBe(200);
+    });
+
+    it('PATCH /settings/me returns 200, 400 for a bad value and 401 without a token', async () => {
+      const updated = await probe('patch', '/settings/me', (req) =>
+        auth(ownerToken, req).send({ theme: 'dark', digestFrequency: 'off' }),
+      '200');
+      expect(updated.body.theme).toBe('dark');
+      expect(updated.body.digestFrequency).toBe('off');
+
+      await probe(
+        'patch',
+        '/settings/me',
+        (req) => auth(ownerToken, req).send({ theme: 'neon' }),
+        '400',
+        'undocumented value',
+      );
+
+      await probe(
+        'patch',
+        '/settings/me',
+        (req) => req.send({ theme: 'dark' }),
+        '401',
+        'no token',
+      );
+    });
+
+    it('GET /settings/organization returns 200, 401, 403 and 404', async () => {
+      const settings = await probe(
+        'get',
+        '/settings/organization',
+        (req) => asOwner(req),
+        '200',
+      );
+      expect(settings.body.organizationId).toBe(organizationId);
+      expect(settings.body.workingDayStartMinutes).toEqual(
+        expect.any(Number),
+      );
+
+      await probe(
+        'get',
+        '/settings/organization',
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'get',
+        '/settings/organization',
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+
+      // Membership is resolved before the lookup, so the header has to travel.
+      await probe(
+        'get',
+        '/settings/organization',
+        (req) => auth(ownerToken, req),
+        '404',
+        'no organization context',
+      );
+    });
+
+    it('PATCH /settings/organization returns 200, 400, 401, 403 and 404', async () => {
+      const updated = await probe(
+        'patch',
+        '/settings/organization',
+        (req) =>
+          asOwner(req).send({
+            timezone: 'Europe/Paris',
+            weekStart: 'sunday',
+            workingDayStartMinutes: 480,
+            workingDayEndMinutes: 1020,
+          }),
+        '200',
+      );
+      expect(updated.body.timezone).toBe('Europe/Paris');
+      expect(updated.body.weekStart).toBe('sunday');
+
+      // The working window is a rule about the pair, not either bound, so this
+      // is a 400 the field validation alone could not have produced.
+      await probe(
+        'patch',
+        '/settings/organization',
+        (req) =>
+          asOwner(req).send({
+            workingDayStartMinutes: 18 * 60,
+            workingDayEndMinutes: 9 * 60,
+          }),
+        '400',
+        'window ends before it starts',
+      );
+
+      await probe(
+        'patch',
+        '/settings/organization',
+        (req) => req.send({ weekStart: 'monday' }),
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'patch',
+        '/settings/organization',
+        (req) => asOutsider(req).send({ weekStart: 'monday' }),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'patch',
+        '/settings/organization',
+        (req) => auth(ownerToken, req).send({ weekStart: 'monday' }),
+        '404',
+        'no organization context',
+      );
+    });
+  });
+
   describe('organization teardown', () => {
     it('DELETE /organizations/{organizationId} returns 200 for a confirmed owner', async () => {
       // The only operation that tears the tenant down, so it runs after every

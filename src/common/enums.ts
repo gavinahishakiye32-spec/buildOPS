@@ -177,3 +177,89 @@ export const TIME_COMPLEXITY_STATUSES = ['active', 'archived'] as const;
 
 /** How a logged duration compares to the subtask's estimation envelope. */
 export const TIME_COMPLEXITY_VARIANCES = ['within', 'under', 'over'] as const;
+
+export const SETTINGS_THEMES = ['system', 'light', 'dark'] as const;
+
+export const SETTINGS_LOCALES = ['en', 'fr', 'es', 'de', 'pt'] as const;
+
+export const SETTINGS_DATE_FORMATS = [
+  'YYYY-MM-DD',
+  'DD/MM/YYYY',
+  'MM/DD/YYYY',
+] as const;
+
+export const SETTINGS_TIME_FORMATS = ['24h', '12h'] as const;
+
+export const SETTINGS_WEEK_STARTS = ['monday', 'sunday'] as const;
+
+/**
+ * Whether the reader wants to be interrupted.
+ *
+ * `in_app_only` and `off` exist because "email me about everything" is not
+ * something every member of an organization wants, and a member who cannot
+ * narrow it has no way to opt out at all. `off` is therefore a real value rather
+ * than an absence: it has to survive a round trip through the database without
+ * being mistaken for "never configured, so notify me".
+ */
+export const SETTINGS_DIGEST_FREQUENCIES = [
+  'realtime',
+  'daily',
+  'weekly',
+  'off',
+] as const;
+
+export type SettingsTheme = (typeof SETTINGS_THEMES)[number];
+export type SettingsLocale = (typeof SETTINGS_LOCALES)[number];
+export type SettingsDateFormat = (typeof SETTINGS_DATE_FORMATS)[number];
+export type SettingsTimeFormat = (typeof SETTINGS_TIME_FORMATS)[number];
+export type SettingsWeekStart = (typeof SETTINGS_WEEK_STARTS)[number];
+export type SettingsDigestFrequency =
+  (typeof SETTINGS_DIGEST_FREQUENCIES)[number];
+
+/**
+ * The settings a user sees before changing anything.
+ *
+ * These are the values written by the migration into every existing row *and*
+ * the values a missing column falls back to, and the two have to be the same
+ * list. Storing them at the database rather than filling them in the service
+ * means a reader that bypasses the API still sees a usable value instead of a
+ * null, and it keeps the "unset" state from being representable: every column
+ * is NOT NULL, so there is no such thing as a partially configured settings row
+ * to interpret at read time.
+ */
+export const DEFAULT_USER_SETTINGS = {
+  theme: 'system' as SettingsTheme,
+  locale: 'en' as SettingsLocale,
+  timezone: 'UTC',
+  dateFormat: 'YYYY-MM-DD' as SettingsDateFormat,
+  timeFormat: '24h' as SettingsTimeFormat,
+  digestFrequency: 'daily' as SettingsDigestFrequency,
+} as const;
+
+/**
+ * The settings shared by everyone in an organization.
+ *
+ * `weekStart` and `timeFormat` default to the same values as a user's, so a
+ * member who has never touched either gets the organization default rather than
+ * a conflicting one. `workingDayStartMinutes`/`workingDayEndMinutes` are minutes
+ * from midnight rather than a "09:00" string: the working window has to be
+ * comparable as a number to compute an overlap, and a string column would push
+ * that arithmetic into every caller.
+ */
+export const DEFAULT_ORGANIZATION_SETTINGS = {
+  timezone: 'UTC',
+  weekStart: 'monday' as SettingsWeekStart,
+  timeFormat: '24h' as SettingsTimeFormat,
+  workingDayStartMinutes: 9 * 60,
+  workingDayEndMinutes: 17 * 60,
+} as const;
+
+/** IANA zone names, validated rather than trusted. */
+export const TIMEZONE_PATTERN =
+  /^[A-Za-z][A-Za-z0-9_+-]*(\/[A-Za-z0-9_+-]+){0,2}$/;
+
+/** 00:00 through 23:59 as `HH:MM`. */
+export const TIME_OF_DAY_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** How many minutes a single working-window bound may be. */
+export const MAX_MINUTES_IN_DAY = 24 * 60 - 1;

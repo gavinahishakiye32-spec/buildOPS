@@ -165,6 +165,12 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['GET', '/time-complexity/variance/{taskId}', ['200']],
   // Dashboard: read-only aggregates over the same records.
   ['GET', '/dashboard/overview', ['200']],
+  // Settings, split by what authenticates them: `/settings/me` belongs to the
+  // user and needs no organization, `/settings/organization` is scoped to one.
+  ['GET', '/settings/me', ['200']],
+  ['PATCH', '/settings/me', ['200']],
+  ['GET', '/settings/organization', ['200']],
+  ['PATCH', '/settings/organization', ['200']],
   ['GET', '/dashboard/projects', ['200']],
   ['GET', '/dashboard/clients', ['200']],
   ['GET', '/dashboard/overdue', ['200']],

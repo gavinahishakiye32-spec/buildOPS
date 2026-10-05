@@ -14,6 +14,10 @@ import type { DataSource } from 'typeorm';
  * and wiping it would take out the fixture those tests are built on.
  */
 const TABLES = [
+  // Before their owners: both cascade from `users` and `organizations`, but
+  // listing them first keeps the intent obvious if the cascade ever changes.
+  'organization_settings',
+  'user_settings',
   'refresh_tokens',
   'time_entries',
   'time_complexity',

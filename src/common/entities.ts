@@ -14,6 +14,8 @@ import { Subtask } from '../subtask/subtask.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
 import { TimeComplexity } from '../time-complexity/time-complexity.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
+import { UserSettings } from '../settings/user-settings.entity.js';
+import { OrganizationSettings } from '../settings/organization-settings.entity.js';
 
 /** Every entity mapped by the ORM; the single source of truth for TypeORM. */
 export const ENTITIES = [
@@ -33,4 +35,6 @@ export const ENTITIES = [
   TimeEntry,
   TimeComplexity,
   RefreshToken,
+  UserSettings,
+  OrganizationSettings,
 ];

@@ -3,6 +3,7 @@ import { InitialSchema1700000000000 } from './migrations/1700000000000-initial-s
 import { BillingAndTrialExpiry1700000000001 } from './migrations/1700000000001-billing-and-trial-expiry.js';
 import { RefreshTokens1700000000002 } from './migrations/1700000000002-refresh-tokens.js';
 import { SoftDeletes1700000000003 } from './migrations/1700000000003-soft-deletes.js';
+import { Settings1700000000004 } from './migrations/1700000000004-settings.js';
 
 /**
  * The ordered migration list. TypeORM records what has run in the `migrations`
@@ -15,4 +16,5 @@ export const MIGRATIONS: (new () => MigrationInterface)[] = [
   BillingAndTrialExpiry1700000000001,
   RefreshTokens1700000000002,
   SoftDeletes1700000000003,
+  Settings1700000000004,
 ];
