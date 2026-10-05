@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   CanActivate,
   ExecutionContext,
   ForbiddenException,
@@ -98,17 +99,40 @@ export class PermissionsGuard implements CanActivate {
     return true;
   }
 
+  /**
+   * Guards run **before** pipes, so this reads the raw `:organizationId` segment
+   * and the raw header. A non-UUID reaching the membership query would make
+   * PostgreSQL raise `invalid input syntax for type uuid`, surfacing as an
+   * undocumented `500`. Rejecting it here keeps the answer the documented `400`
+   * and matches `ParseUUIDPipe`, which cannot run first.
+   */
   private resolveOrganizationId(request: AuthenticatedRequest): string | null {
     const fromParam = (request.params as Record<string, string> | undefined)
       ?.organizationId;
 
     if (typeof fromParam === 'string' && fromParam.length > 0) {
+      this.assertUuid(fromParam);
       return fromParam;
     }
 
     const header = request.headers[ORGANIZATION_HEADER];
     const value = Array.isArray(header) ? header[0] : header;
 
-    return typeof value === 'string' && value.length > 0 ? value : null;
+    if (typeof value === 'string' && value.length > 0) {
+      this.assertUuid(value);
+      return value;
+    }
+
+    return null;
+  }
+
+  private assertUuid(value: string): void {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        value,
+      )
+    ) {
+      throw new BadRequestException('Validation failed (uuid is expected)');
+    }
   }
 }
