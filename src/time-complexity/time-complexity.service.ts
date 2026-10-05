@@ -62,8 +62,11 @@ export class TimeComplexityService {
       qb.andWhere('tc.status = :status', { status: query.status });
     }
 
+    // `time_complexity` has no timestamp column, so the primary key is the only
+    // stable order available; ordering by `created_at` here made every read of
+    // this collection fail against a real database.
     const [items, total] = await qb
-      .orderBy('tc.created_at', 'DESC')
+      .orderBy('tc.id', 'ASC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();
