@@ -224,6 +224,10 @@ export class RoleService extends MembershipResolver {
     const roles = limits.manager.getRepository(Role);
 
     if (dto.userId) {
+      // The user has to exist and be verified before the seat is counted:
+      // assigning to an unknown id would otherwise reach the foreign key and
+      // surface as a 500 rather than the 404 the caller can act on.
+      await this.assertUserExists(dto.userId);
       await this.assertMemberSlotFree(
         organizationId,
         dto.userId,
@@ -326,6 +330,10 @@ export class RoleService extends MembershipResolver {
     }
 
     role.userId = null;
+    // `findRole` loads the `user` relation, and TypeORM writes the foreign key
+    // back from that relation on save: clearing only `userId` left the holder
+    // in place and answered the unassign with the member it was meant to drop.
+    role.user = null;
     await this.roleRepo.save(role);
 
     return this.findRole(organizationId, roleId);
