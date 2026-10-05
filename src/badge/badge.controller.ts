@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -43,7 +41,7 @@ import { TrashEntryDto } from '../common/soft-delete.js';
 
 const BadgePageDto = PaginatedSchema(BadgeResponseDto, 'BadgePage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('badges')
 @Protected()
 @Controller('badges')
@@ -58,7 +56,11 @@ export class BadgeController {
     description:
       'Creates an organization-defined label that can be attached to tasks for consistent classification.',
   })
-  @ApiResponse({ status: 201, type: BadgeResponseDto })
+  @ApiResponse({
+    description: 'Badge created',
+    status: 201,
+    type: BadgeResponseDto,
+  })
   @ApiErrors(400, 403)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -76,7 +78,11 @@ export class BadgeController {
     description:
       'Paginated task classification badges of the active organization.',
   })
-  @ApiResponse({ status: 200, type: BadgePageDto })
+  @ApiResponse({
+    description: 'One page of badges',
+    status: 200,
+    type: BadgePageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -85,7 +91,6 @@ export class BadgeController {
     const page = await this.badgeService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((badge) => badge.toResponse()) };
   }
-
 
   /**
    * Deleted badges, newest first.
@@ -103,7 +108,11 @@ export class BadgeController {
       'Soft-deleted badges, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Badges moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -121,7 +130,11 @@ export class BadgeController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: BadgeResponseDto })
+  @ApiResponse({
+    description: 'Badge restored, no longer in the trash',
+    status: 201,
+    type: BadgeResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -142,7 +155,11 @@ export class BadgeController {
     summary: 'Get a badge',
     description: 'One badge of the active organization.',
   })
-  @ApiResponse({ status: 200, type: BadgeResponseDto })
+  @ApiResponse({
+    description: 'The badge',
+    status: 200,
+    type: BadgeResponseDto,
+  })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -159,7 +176,11 @@ export class BadgeController {
     summary: 'Update a badge',
     description: 'Renames a badge or updates its description, color and icon.',
   })
-  @ApiResponse({ status: 200, type: BadgeResponseDto })
+  @ApiResponse({
+    description: 'The badge as updated',
+    status: 200,
+    type: BadgeResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -182,17 +203,17 @@ export class BadgeController {
     summary: 'Delete a badge',
     description: 'Deletes the badge; tasks keep a null badge reference.',
   })
-  @ApiResponse({ status: 200, type: BadgeMessageResponseDto })
+  @ApiResponse({
+    description: 'Badge moved to trash',
+    status: 200,
+    type: BadgeMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('badgeId', ParseUUIDPipe) badgeId: string,
   ): Promise<BadgeMessageResponseDto> {
-    await this.badgeService.remove(
-      auth.organizationId,
-      badgeId,
-      auth.userId,
-    );
+    await this.badgeService.remove(auth.organizationId, badgeId, auth.userId);
     return { message: 'Badge deleted' };
   }
 }

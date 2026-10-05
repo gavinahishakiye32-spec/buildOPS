@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -45,7 +43,7 @@ import {
 
 const TaskPageDto = PaginatedSchema(TaskResponseDto, 'TaskPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('tasks')
 @Protected()
 @Controller('tasks')
@@ -60,7 +58,11 @@ export class TaskController {
     description:
       'Creates a task in a project of the active organization. Team and badge, when provided, must belong to the same organization.',
   })
-  @ApiResponse({ status: 201, type: TaskResponseDto })
+  @ApiResponse({
+    description: 'Task created',
+    status: 201,
+    type: TaskResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -78,7 +80,11 @@ export class TaskController {
     description:
       'Paginated tasks of the active organization, filterable by project, team, badge, status and priority.',
   })
-  @ApiResponse({ status: 200, type: TaskPageDto })
+  @ApiResponse({
+    description: 'One page of tasks',
+    status: 200,
+    type: TaskPageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -87,7 +93,6 @@ export class TaskController {
     const page = await this.taskService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((task) => task.toResponse()) };
   }
-
 
   /**
    * Deleted tasks, newest first.
@@ -105,7 +110,11 @@ export class TaskController {
       'Soft-deleted tasks, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Tasks moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -123,7 +132,11 @@ export class TaskController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: TaskResponseDto })
+  @ApiResponse({
+    description: 'Task restored, no longer in the trash',
+    status: 201,
+    type: TaskResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -145,7 +158,7 @@ export class TaskController {
     description:
       'One task of the active organization, with its project, team and badge references.',
   })
-  @ApiResponse({ status: 200, type: TaskResponseDto })
+  @ApiResponse({ description: 'The task', status: 200, type: TaskResponseDto })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -163,7 +176,11 @@ export class TaskController {
     description:
       'Updates title, description, priority, status, due date, team assignment and badge classification.',
   })
-  @ApiResponse({ status: 200, type: TaskResponseDto })
+  @ApiResponse({
+    description: 'The task as updated',
+    status: 200,
+    type: TaskResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -186,7 +203,11 @@ export class TaskController {
     summary: 'Delete a task',
     description: 'Deletes the task with its subtasks and time entries.',
   })
-  @ApiResponse({ status: 200, type: TaskMessageResponseDto })
+  @ApiResponse({
+    description: 'Task moved to trash',
+    status: 200,
+    type: TaskMessageResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,

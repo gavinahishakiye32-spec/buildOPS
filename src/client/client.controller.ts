@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -43,7 +41,7 @@ import { TrashEntryDto } from '../common/soft-delete.js';
 
 const ClientPageDto = PaginatedSchema(ClientResponseDto, 'ClientPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('clients')
 @Protected()
 @Controller('clients')
@@ -58,7 +56,11 @@ export class ClientController {
     description:
       'Creates a CRM record in the active organization. Email is unique across clients.',
   })
-  @ApiResponse({ status: 201, type: ClientResponseDto })
+  @ApiResponse({
+    description: 'Client created',
+    status: 201,
+    type: ClientResponseDto,
+  })
   @ApiErrors(400, 403, 409)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -75,7 +77,11 @@ export class ClientController {
     summary: 'List clients',
     description: 'Paginated clients of the active organization.',
   })
-  @ApiResponse({ status: 200, type: ClientPageDto })
+  @ApiResponse({
+    description: 'One page of clients',
+    status: 200,
+    type: ClientPageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -87,7 +93,6 @@ export class ClientController {
       items: page.items.map((client) => client.toResponse()),
     };
   }
-
 
   /**
    * Deleted clients, newest first.
@@ -105,7 +110,11 @@ export class ClientController {
       'Soft-deleted clients, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Clients moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -123,7 +132,11 @@ export class ClientController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: ClientResponseDto })
+  @ApiResponse({
+    description: 'Client restored, no longer in the trash',
+    status: 201,
+    type: ClientResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -144,7 +157,11 @@ export class ClientController {
     summary: 'Get a client',
     description: 'One client of the active organization.',
   })
-  @ApiResponse({ status: 200, type: ClientResponseDto })
+  @ApiResponse({
+    description: 'The client',
+    status: 200,
+    type: ClientResponseDto,
+  })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -165,7 +182,11 @@ export class ClientController {
     description:
       'Updates the mutable fields of a client. Only fields you send are modified, and a conflicting email returns 409.',
   })
-  @ApiResponse({ status: 200, type: ClientResponseDto })
+  @ApiResponse({
+    description: 'The client as updated',
+    status: 200,
+    type: ClientResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -189,17 +210,17 @@ export class ClientController {
     description:
       'Deletes the client. Projects linked to it keep a null client reference.',
   })
-  @ApiResponse({ status: 200, type: ClientMessageResponseDto })
+  @ApiResponse({
+    description: 'Client moved to trash',
+    status: 200,
+    type: ClientMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ): Promise<ClientMessageResponseDto> {
-    await this.clientService.remove(
-      auth.organizationId,
-      clientId,
-      auth.userId,
-    );
+    await this.clientService.remove(auth.organizationId, clientId, auth.userId);
     return { message: 'Client deleted' };
   }
 }

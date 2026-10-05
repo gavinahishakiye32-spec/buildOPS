@@ -1,12 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -26,7 +24,7 @@ import {
   DashboardQueryDto,
 } from './dto/dashboard.dto.js';
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('dashboard')
 @Protected()
 @Controller('dashboard')
@@ -41,7 +39,11 @@ export class DashboardController {
     description:
       'Aggregates projects, tasks, subtasks, logged time and estimation variance for the active organization over a date range (default: last 30 days).',
   })
-  @ApiResponse({ status: 200, type: DashboardOverviewDto })
+  @ApiResponse({
+    description: 'Counts and totals across the organization',
+    status: 200,
+    type: DashboardOverviewDto,
+  })
   @ApiErrors(400, 403)
   async overview(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -57,7 +59,11 @@ export class DashboardController {
     description:
       'Per project task/subtask counters, completion rate and logged seconds.',
   })
-  @ApiResponse({ status: 200, type: DashboardProjectListDto })
+  @ApiResponse({
+    description: 'Per-project progress of the organization',
+    status: 200,
+    type: DashboardProjectListDto,
+  })
   @ApiErrors(400, 403)
   async projects(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -72,7 +78,11 @@ export class DashboardController {
     summary: 'Client workload',
     description: 'Projects and logged seconds grouped by client.',
   })
-  @ApiResponse({ status: 200, type: DashboardClientListDto })
+  @ApiResponse({
+    description: 'Workload per client of the organization',
+    status: 200,
+    type: DashboardClientListDto,
+  })
   @ApiErrors(400, 403)
   async clients(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -88,7 +98,11 @@ export class DashboardController {
     description:
       'Open subtasks whose due date has passed, with the parent task priority.',
   })
-  @ApiResponse({ status: 200, type: DashboardOverdueDto })
+  @ApiResponse({
+    description: 'Subtasks past their due date',
+    status: 200,
+    type: DashboardOverdueDto,
+  })
   @ApiErrors(400, 403)
   async overdue(
     @OrgAuth() auth: OrganizationAuthContext,

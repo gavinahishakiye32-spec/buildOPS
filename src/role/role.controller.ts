@@ -10,18 +10,16 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
 } from '../common/decorators/org-auth.decorator.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrganizationHeader,
   Protected,
@@ -44,7 +42,7 @@ import {
 } from './dto/role-response.dto.js';
 import { ROLE_TEMPLATES } from './role.service.js';
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('roles')
 @Protected()
 @Controller('organizations/:organizationId')
@@ -59,7 +57,11 @@ export class RoleController {
     description:
       'Roles of the organization with their attached permissions. Rows without userId are role definitions not assigned to a member yet.',
   })
-  @ApiResponse({ status: 200, type: [RoleResponseDto] })
+  @ApiResponse({
+    description: 'Roles of the organization with their permissions',
+    status: 200,
+    type: [RoleResponseDto],
+  })
   @ApiErrors(403)
   async listRoles(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -76,7 +78,11 @@ export class RoleController {
     description:
       'Reusable default role templates (owner, project_manager, developer, tester, viewer) and the full permission catalog.',
   })
-  @ApiResponse({ status: 200, type: [RoleTemplateDto] })
+  @ApiResponse({
+    description: 'The default role templates and the permission catalog',
+    status: 200,
+    type: [RoleTemplateDto],
+  })
   @ApiErrors(403)
   roleTemplates(): RoleTemplateDto[] {
     return ROLE_TEMPLATES;
@@ -90,7 +96,11 @@ export class RoleController {
     description:
       'Members with the role that grants their organization access and its permissions.',
   })
-  @ApiResponse({ status: 200, type: [MemberResponseDto] })
+  @ApiResponse({
+    description: 'Members with the role that grants their access',
+    status: 200,
+    type: [MemberResponseDto],
+  })
   @ApiErrors(403)
   async listMembers(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -106,7 +116,11 @@ export class RoleController {
     description:
       'Grants an existing user access to the organization through a default role template.',
   })
-  @ApiResponse({ status: 201, type: MemberResponseDto })
+  @ApiResponse({
+    description: 'The member with the role they were added under',
+    status: 201,
+    type: MemberResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async addMember(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -136,7 +150,11 @@ export class RoleController {
     description:
       'Replaces the role a member accesses the organization with; their old role assignment is removed.',
   })
-  @ApiResponse({ status: 200, type: MemberResponseDto })
+  @ApiResponse({
+    description: 'The member with the role they were added under',
+    status: 200,
+    type: MemberResponseDto,
+  })
   @ApiErrors(403, 404)
   async updateMember(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -171,7 +189,11 @@ export class RoleController {
     summary: 'Remove a member',
     description: 'Revokes the member access to the organization.',
   })
-  @ApiResponse({ status: 200, type: RoleMessageResponseDto })
+  @ApiResponse({
+    description: 'Member access revoked',
+    status: 200,
+    type: RoleMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async removeMember(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -189,7 +211,11 @@ export class RoleController {
     description:
       'Creates a role definition, optionally assigns it to a member and attaches permissions from the catalog.',
   })
-  @ApiResponse({ status: 201, type: RoleResponseDto })
+  @ApiResponse({
+    description: 'Role created',
+    status: 201,
+    type: RoleResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async createRole(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -206,7 +232,11 @@ export class RoleController {
     summary: 'Get a role',
     description: 'One role of the organization with its attached permissions.',
   })
-  @ApiResponse({ status: 200, type: RoleResponseDto })
+  @ApiResponse({
+    description: 'The role with its attached permissions',
+    status: 200,
+    type: RoleResponseDto,
+  })
   @ApiErrors(403, 404)
   async findRole(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -224,8 +254,12 @@ export class RoleController {
     description:
       'Renames a role or updates its description. Replace the permission set with PUT /organizations/{organizationId}/roles/{roleId}/permissions.',
   })
-  @ApiResponse({ status: 200, type: RoleResponseDto })
-  @ApiErrors(403, 404)
+  @ApiResponse({
+    description: 'The role as updated',
+    status: 200,
+    type: RoleResponseDto,
+  })
+  @ApiErrors(400, 403, 404)
   async updateRole(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('roleId', ParseUUIDPipe) roleId: string,
@@ -247,7 +281,11 @@ export class RoleController {
     summary: 'Delete a role',
     description: 'Deletes the role and the permissions attached to it.',
   })
-  @ApiResponse({ status: 200, type: RoleMessageResponseDto })
+  @ApiResponse({
+    description: 'Role deleted',
+    status: 200,
+    type: RoleMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async deleteRole(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -265,7 +303,11 @@ export class RoleController {
     description:
       'Replaces the whole permission set attached to the role. Unknown permission names are rejected.',
   })
-  @ApiResponse({ status: 200, type: RoleResponseDto })
+  @ApiResponse({
+    description: 'The role with the permission set that replaced the old one',
+    status: 200,
+    type: RoleResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async replacePermissions(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -288,7 +330,11 @@ export class RoleController {
     description:
       'Assigns an unassigned role to a member. A member holds a single role per organization.',
   })
-  @ApiResponse({ status: 201, type: RoleResponseDto })
+  @ApiResponse({
+    description: 'The role as assigned, naming the member holding it',
+    status: 201,
+    type: RoleResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async assignRole(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -311,7 +357,11 @@ export class RoleController {
     summary: 'Unassign a role',
     description: 'Removes the member currently holding the role.',
   })
-  @ApiResponse({ status: 200, type: RoleResponseDto })
+  @ApiResponse({
+    description: 'The role, now unassigned',
+    status: 200,
+    type: RoleResponseDto,
+  })
   @ApiErrors(403, 404)
   async unassignRole(
     @OrgAuth() auth: OrganizationAuthContext,

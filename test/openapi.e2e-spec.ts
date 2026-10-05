@@ -38,12 +38,12 @@ const HTTP_METHODS = ['get', 'post', 'patch', 'put', 'delete'];
  * The table is exhaustive on purpose: an undocumented or renamed endpoint, or a
  * lost `@ApiResponse`, fails this test.
  *
- * The document is published incrementally, one module at a time, so this table
- * covers the modules documented so far: auth, plans, subscription and
- * organizations. A module joins the table when it joins the document, which
- * happens in the same commit.
+ * It is ordered the way a caller walks the API: identity first, then billing,
+ * then the tenant, then the records that hang off it. Every module is here, so
+ * the document and this table only ever move together.
  */
 const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
+  // Identity: registration, verification, credentials and the session itself.
   ['POST', '/auth/register', ['201']],
   ['POST', '/auth/login', ['201']],
   ['GET', '/auth/verify-email', ['200']],
@@ -58,19 +58,116 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['GET', '/auth/sessions', ['200']],
   ['GET', '/auth/profile', ['200']],
   ['PATCH', '/auth/profile', ['200']],
+  // Billing: the catalogue is public, everything else needs a token.
   ['GET', '/plans', ['200']],
   // 200 when the payment settles (the plan is in force), 202 when a checkout
   // has to be completed before it applies.
   ['POST', '/subscription', ['200', '202']],
   ['GET', '/subscription', ['200']],
+  ['PATCH', '/subscription/plan', ['200', '202']],
   ['DELETE', '/subscription', ['200']],
   ['GET', '/subscription/usage', ['200']],
-  ['PATCH', '/subscription/plan', ['200', '202']],
+  // The tenant. The list and the create need no organization yet, so they are
+  // scoped to the subscription; everything else names the organization.
   ['POST', '/organizations', ['201']],
   ['GET', '/organizations', ['200']],
   ['GET', '/organizations/{organizationId}', ['200']],
   ['PATCH', '/organizations/{organizationId}', ['200']],
   ['DELETE', '/organizations/{organizationId}', ['200']],
+  // Roles and the members that hold them.
+  ['GET', '/organizations/{organizationId}/roles', ['200']],
+  ['POST', '/organizations/{organizationId}/roles', ['201']],
+  ['GET', '/organizations/{organizationId}/roles/{roleId}', ['200']],
+  ['PATCH', '/organizations/{organizationId}/roles/{roleId}', ['200']],
+  ['DELETE', '/organizations/{organizationId}/roles/{roleId}', ['200']],
+  [
+    'PUT',
+    '/organizations/{organizationId}/roles/{roleId}/permissions',
+    ['200'],
+  ],
+  ['POST', '/organizations/{organizationId}/roles/{roleId}/assign', ['201']],
+  ['DELETE', '/organizations/{organizationId}/roles/{roleId}/assign', ['200']],
+  ['GET', '/organizations/{organizationId}/role-templates', ['200']],
+  ['GET', '/organizations/{organizationId}/members', ['200']],
+  ['POST', '/organizations/{organizationId}/members', ['201']],
+  ['PATCH', '/organizations/{organizationId}/members/{userId}', ['200']],
+  ['DELETE', '/organizations/{organizationId}/members/{userId}', ['200']],
+  // Teams and their membership.
+  ['POST', '/teams', ['201']],
+  ['GET', '/teams', ['200']],
+  ['GET', '/teams/{teamId}', ['200']],
+  ['PATCH', '/teams/{teamId}', ['200']],
+  ['DELETE', '/teams/{teamId}', ['200']],
+  ['GET', '/teams/{teamId}/members', ['200']],
+  ['POST', '/teams/{teamId}/members', ['201']],
+  ['PATCH', '/teams/{teamId}/members/{memberId}', ['200']],
+  ['DELETE', '/teams/{teamId}/members/{memberId}', ['200']],
+  // Soft deletes: the trash listing and the restore of one record.
+  ['GET', '/teams/trash', ['200']],
+  ['POST', '/teams/{teamId}/restore', ['201']],
+  // Clients.
+  ['POST', '/clients', ['201']],
+  ['GET', '/clients', ['200']],
+  ['GET', '/clients/{clientId}', ['200']],
+  ['PATCH', '/clients/{clientId}', ['200']],
+  ['DELETE', '/clients/{clientId}', ['200']],
+  ['GET', '/clients/trash', ['200']],
+  ['POST', '/clients/{clientId}/restore', ['201']],
+  // Badges.
+  ['POST', '/badges', ['201']],
+  ['GET', '/badges', ['200']],
+  ['GET', '/badges/{badgeId}', ['200']],
+  ['PATCH', '/badges/{badgeId}', ['200']],
+  ['DELETE', '/badges/{badgeId}', ['200']],
+  ['GET', '/badges/trash', ['200']],
+  ['POST', '/badges/{badgeId}/restore', ['201']],
+  // Projects.
+  ['POST', '/projects', ['201']],
+  ['GET', '/projects', ['200']],
+  ['GET', '/projects/{projectId}', ['200']],
+  ['PATCH', '/projects/{projectId}', ['200']],
+  ['DELETE', '/projects/{projectId}', ['200']],
+  ['GET', '/projects/trash', ['200']],
+  ['POST', '/projects/{projectId}/restore', ['201']],
+  // Tasks, and the subtasks nested under them.
+  ['POST', '/tasks', ['201']],
+  ['GET', '/tasks', ['200']],
+  ['GET', '/tasks/{taskId}', ['200']],
+  ['PATCH', '/tasks/{taskId}', ['200']],
+  ['DELETE', '/tasks/{taskId}', ['200']],
+  ['GET', '/tasks/trash', ['200']],
+  ['POST', '/tasks/{taskId}/restore', ['201']],
+  ['POST', '/tasks/{taskId}/subtasks', ['201']],
+  ['GET', '/tasks/{taskId}/subtasks', ['200']],
+  ['GET', '/tasks/{taskId}/subtasks/{subtaskId}', ['200']],
+  ['PATCH', '/tasks/{taskId}/subtasks/{subtaskId}', ['200']],
+  ['DELETE', '/tasks/{taskId}/subtasks/{subtaskId}', ['200']],
+  ['GET', '/tasks/{taskId}/subtasks/trash', ['200']],
+  ['POST', '/tasks/{taskId}/subtasks/{subtaskId}/restore', ['201']],
+  // Time entries, including the running-timer endpoints.
+  ['POST', '/time-entries', ['201']],
+  ['GET', '/time-entries', ['200']],
+  ['GET', '/time-entries/{timeEntryId}', ['200']],
+  ['PATCH', '/time-entries/{timeEntryId}', ['200']],
+  ['DELETE', '/time-entries/{timeEntryId}', ['200']],
+  ['GET', '/time-entries/trash', ['200']],
+  ['POST', '/time-entries/{timeEntryId}/restore', ['201']],
+  ['POST', '/time-entries/timer/start', ['201']],
+  // Stopping the timer edits the entry that was running, so it answers 200.
+  ['POST', '/time-entries/timer/stop', ['200']],
+  ['GET', '/time-entries/timer/active', ['200']],
+  // Time complexity: the estimate attached to a task and its variance.
+  ['POST', '/time-complexity', ['201']],
+  ['GET', '/time-complexity', ['200']],
+  ['GET', '/time-complexity/{complexityId}', ['200']],
+  ['PATCH', '/time-complexity/{complexityId}', ['200']],
+  ['DELETE', '/time-complexity/{complexityId}', ['200']],
+  ['GET', '/time-complexity/variance/{taskId}', ['200']],
+  // Dashboard: read-only aggregates over the same records.
+  ['GET', '/dashboard/overview', ['200']],
+  ['GET', '/dashboard/projects', ['200']],
+  ['GET', '/dashboard/clients', ['200']],
+  ['GET', '/dashboard/overdue', ['200']],
 ];
 
 /** Operations reachable without a bearer token. */

@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -45,7 +43,7 @@ import { TrashEntryDto } from '../common/soft-delete.js';
 
 const TimeEntryPageDto = PaginatedSchema(TimeEntryResponseDto, 'TimeEntryPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('time-entries')
 @Protected()
 @Controller('time-entries')
@@ -60,7 +58,11 @@ export class TimeEntryController {
     description:
       'Creates a completed or running time entry against a subtask. Only one timer may run at a time per user.',
   })
-  @ApiResponse({ status: 201, type: TimeEntryResponseDto })
+  @ApiResponse({
+    description: 'The time entry as created',
+    status: 201,
+    type: TimeEntryResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -82,7 +84,11 @@ export class TimeEntryController {
     description:
       'Without time_entry.view_all a caller sees only their own entries; with it, the whole organization.',
   })
-  @ApiResponse({ status: 200, type: TimeEntryPageDto })
+  @ApiResponse({
+    description: 'One page of time entries',
+    status: 200,
+    type: TimeEntryPageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -106,7 +112,11 @@ export class TimeEntryController {
     description:
       'Active timer of the caller wrapped in an envelope, null when nothing is running.',
   })
-  @ApiResponse({ status: 200, type: ActiveTimerResponseDto })
+  @ApiResponse({
+    description: 'The running timer, or an empty state when none is running',
+    status: 200,
+    type: ActiveTimerResponseDto,
+  })
   @ApiErrors(403)
   async activeTimer(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -127,7 +137,11 @@ export class TimeEntryController {
     description:
       'Starts a timer on a subtask: entry_time = now, exit_time = null. Only one timer may run at a time.',
   })
-  @ApiResponse({ status: 201, type: TimerResponseDto })
+  @ApiResponse({
+    description: 'The timer as started',
+    status: 201,
+    type: TimerResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async startTimer(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -154,7 +168,11 @@ export class TimeEntryController {
     description:
       'Stops the caller timer: exit_time = now, validated against entry_time, and returns the computed duration.',
   })
-  @ApiResponse({ status: 200, type: TimerResponseDto })
+  @ApiResponse({
+    description: 'The time entry the timer wrote to, as saved',
+    status: 200,
+    type: TimerResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async stopTimer(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -172,7 +190,6 @@ export class TimeEntryController {
     };
   }
 
-
   /**
    * Deleted time entries, newest first.
    *
@@ -189,7 +206,11 @@ export class TimeEntryController {
       'Soft-deleted time entries, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Time entries moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -207,7 +228,11 @@ export class TimeEntryController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: TimeEntryResponseDto })
+  @ApiResponse({
+    description: 'Time entry restored, no longer in the trash',
+    status: 201,
+    type: TimeEntryResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -230,7 +255,11 @@ export class TimeEntryController {
     description:
       'One time entry of the active organization. isRunning is true while the timer keeps counting and durationSeconds is live until it stops.',
   })
-  @ApiResponse({ status: 200, type: TimeEntryResponseDto })
+  @ApiResponse({
+    description: 'The time entry',
+    status: 200,
+    type: TimeEntryResponseDto,
+  })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -254,7 +283,11 @@ export class TimeEntryController {
     description:
       'Adjusts entry_time/exit_time of an entry owned by the caller. exit_time = null reopens the timer.',
   })
-  @ApiResponse({ status: 200, type: TimeEntryResponseDto })
+  @ApiResponse({
+    description: 'The time entry as updated',
+    status: 200,
+    type: TimeEntryResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -279,7 +312,11 @@ export class TimeEntryController {
     description:
       'Deletes a time entry of the active organization. Only the user who logged it can delete it; other members get a 404.',
   })
-  @ApiResponse({ status: 200, type: TimeEntryMessageResponseDto })
+  @ApiResponse({
+    description: 'Time entry moved to trash',
+    status: 200,
+    type: TimeEntryMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,

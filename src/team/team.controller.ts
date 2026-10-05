@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -46,7 +44,7 @@ import { TrashEntryDto } from '../common/soft-delete.js';
 
 const TeamPageDto = PaginatedSchema(TeamResponseDto, 'TeamPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('teams')
 @Protected()
 @Controller('teams')
@@ -60,7 +58,11 @@ export class TeamController {
     summary: 'Create a team',
     description: 'Creates a team inside the active organization.',
   })
-  @ApiResponse({ status: 201, type: TeamResponseDto })
+  @ApiResponse({
+    description: 'Team created',
+    status: 201,
+    type: TeamResponseDto,
+  })
   @ApiErrors(400, 403)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -77,7 +79,11 @@ export class TeamController {
     summary: 'List teams',
     description: 'Paginated teams of the active organization.',
   })
-  @ApiResponse({ status: 200, type: TeamPageDto })
+  @ApiResponse({
+    description: 'One page of teams',
+    status: 200,
+    type: TeamPageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -86,7 +92,6 @@ export class TeamController {
     const page = await this.teamService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((team) => team.toResponse()) };
   }
-
 
   /**
    * Deleted teams, newest first.
@@ -104,7 +109,11 @@ export class TeamController {
       'Soft-deleted teams, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Teams moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -122,7 +131,11 @@ export class TeamController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: TeamResponseDto })
+  @ApiResponse({
+    description: 'Team restored, no longer in the trash',
+    status: 201,
+    type: TeamResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -143,7 +156,7 @@ export class TeamController {
     summary: 'Get a team',
     description: 'One team of the active organization.',
   })
-  @ApiResponse({ status: 200, type: TeamResponseDto })
+  @ApiResponse({ description: 'The team', status: 200, type: TeamResponseDto })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -160,7 +173,11 @@ export class TeamController {
     summary: 'Update a team',
     description: 'Renames a team or updates its description and status.',
   })
-  @ApiResponse({ status: 200, type: TeamResponseDto })
+  @ApiResponse({
+    description: 'The team as updated',
+    status: 200,
+    type: TeamResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -184,17 +201,17 @@ export class TeamController {
     description:
       'Deletes the team, its memberships and its task assignments. Historical time entries are kept.',
   })
-  @ApiResponse({ status: 200, type: TeamMessageResponseDto })
+  @ApiResponse({
+    description: 'Team moved to trash',
+    status: 200,
+    type: TeamMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('teamId', ParseUUIDPipe) teamId: string,
   ): Promise<TeamMessageResponseDto> {
-    await this.teamService.remove(
-      auth.organizationId,
-      teamId,
-      auth.userId,
-    );
+    await this.teamService.remove(auth.organizationId, teamId, auth.userId);
     return { message: 'Team deleted' };
   }
 
@@ -206,7 +223,11 @@ export class TeamController {
     description:
       'Membership records with the team-scoped role and status (spec §7).',
   })
-  @ApiResponse({ status: 200, type: [TeamMemberResponseDto] })
+  @ApiResponse({
+    description: 'Members of the team',
+    status: 200,
+    type: [TeamMemberResponseDto],
+  })
   @ApiErrors(403, 404)
   async listMembers(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -227,7 +248,11 @@ export class TeamController {
     description:
       'Adds an existing organization member to the team. Membership in the organization is required.',
   })
-  @ApiResponse({ status: 201, type: TeamMemberResponseDto })
+  @ApiResponse({
+    description: 'The membership as created',
+    status: 201,
+    type: TeamMemberResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async addMember(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -249,7 +274,11 @@ export class TeamController {
     summary: 'Update a team membership',
     description: 'Changes the team-scoped role or the membership status.',
   })
-  @ApiResponse({ status: 200, type: TeamMemberResponseDto })
+  @ApiResponse({
+    description: 'The membership as updated',
+    status: 200,
+    type: TeamMemberResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async updateMember(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -275,7 +304,11 @@ export class TeamController {
     description:
       'Removes a membership from a team. The user keeps their organization access and their assigned tasks.',
   })
-  @ApiResponse({ status: 200, type: TeamMessageResponseDto })
+  @ApiResponse({
+    description: 'Membership removed',
+    status: 200,
+    type: TeamMessageResponseDto,
+  })
   @ApiErrors(403, 404)
   async removeMember(
     @OrgAuth() auth: OrganizationAuthContext,

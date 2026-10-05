@@ -10,15 +10,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -45,7 +43,7 @@ import {
 
 const ProjectPageDto = PaginatedSchema(ProjectResponseDto, 'ProjectPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('projects')
 @Protected()
 @Controller('projects')
@@ -60,7 +58,11 @@ export class ProjectController {
     description:
       'Creates a project in the active organization. The client, when given, must belong to the same organization, and the plan limit max_projects is enforced.',
   })
-  @ApiResponse({ status: 201, type: ProjectResponseDto })
+  @ApiResponse({
+    description: 'Project created',
+    status: 201,
+    type: ProjectResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async create(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -78,7 +80,11 @@ export class ProjectController {
     description:
       'Paginated projects of the active organization, optionally filtered by status or client.',
   })
-  @ApiResponse({ status: 200, type: ProjectPageDto })
+  @ApiResponse({
+    description: 'One page of projects',
+    status: 200,
+    type: ProjectPageDto,
+  })
   @ApiErrors(403)
   async list(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -90,7 +96,6 @@ export class ProjectController {
       items: page.items.map((project) => project.toResponse()),
     };
   }
-
 
   /**
    * Deleted projects, newest first.
@@ -108,7 +113,11 @@ export class ProjectController {
       'Soft-deleted projects, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Projects moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -126,7 +135,11 @@ export class ProjectController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: ProjectResponseDto })
+  @ApiResponse({
+    description: 'Project restored, no longer in the trash',
+    status: 201,
+    type: ProjectResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -148,7 +161,11 @@ export class ProjectController {
     description:
       'One project of the active organization, with its client reference when linked to a client.',
   })
-  @ApiResponse({ status: 200, type: ProjectResponseDto })
+  @ApiResponse({
+    description: 'The project',
+    status: 200,
+    type: ProjectResponseDto,
+  })
   @ApiErrors(403, 404)
   async findOne(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -169,7 +186,11 @@ export class ProjectController {
     description:
       'Updates name, description, client link, status, dates and budget. Only fields you send are modified, and startDate must stay before or equal to endDate.',
   })
-  @ApiResponse({ status: 200, type: ProjectResponseDto })
+  @ApiResponse({
+    description: 'The project as updated',
+    status: 200,
+    type: ProjectResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async update(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -193,7 +214,11 @@ export class ProjectController {
     description:
       'Deletes the project with its tasks, subtasks and time entries.',
   })
-  @ApiResponse({ status: 200, type: ProjectMessageResponseDto })
+  @ApiResponse({
+    description: 'Project moved to trash',
+    status: 200,
+    type: ProjectMessageResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,

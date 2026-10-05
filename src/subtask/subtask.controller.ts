@@ -11,15 +11,13 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import {
-  ApiExcludeController,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrgAuth,
   type OrganizationAuthContext,
@@ -48,7 +46,7 @@ import {
 
 const SubtaskPageDto = PaginatedSchema(SubtaskResponseDto, 'SubtaskPage');
 
-@ApiExcludeController()
+@ApiRateLimited()
 @ApiTags('subtasks')
 @Protected()
 @Controller('tasks/:taskId/subtasks')
@@ -65,7 +63,11 @@ export class SubtaskController {
     summary: 'List subtasks',
     description: 'Paginated subtasks of a task in the active organization.',
   })
-  @ApiResponse({ status: 200, type: SubtaskPageDto })
+  @ApiResponse({
+    description: 'One page of subtasks',
+    status: 200,
+    type: SubtaskPageDto,
+  })
   @ApiErrors(403, 404)
   async listSubtasks(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -92,7 +94,11 @@ export class SubtaskController {
     description:
       'Creates a subtask. When assignedTo is set, the user must be an active member of the team assigned to the task.',
   })
-  @ApiResponse({ status: 201, type: SubtaskResponseDto })
+  @ApiResponse({
+    description: 'Subtask created',
+    status: 201,
+    type: SubtaskResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async createSubtask(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -107,7 +113,6 @@ export class SubtaskController {
 
     return subtask.toResponse();
   }
-
 
   /**
    * Deleted subtasks, newest first.
@@ -125,11 +130,15 @@ export class SubtaskController {
       'Soft-deleted subtasks, with when each was deleted and who deleted it. ' +
       'These rows are excluded from every ordinary read.',
   })
-  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiResponse({
+    description: 'Subtasks moved to trash',
+    status: 200,
+    type: [TrashEntryDto],
+  })
   @ApiErrors(403)
   async trash(
-    @OrgAuth() auth: OrganizationAuthContext,@Param('taskId', ParseUUIDPipe) taskId: string,
-    
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
   ): Promise<TrashEntryDto[]> {
     return this.subtaskService.listDeleted(auth.organizationId, taskId);
   }
@@ -144,11 +153,16 @@ export class SubtaskController {
       'Only the records removed by that same delete are restored, so anything ' +
       'deleted on purpose afterwards stays deleted.',
   })
-  @ApiResponse({ status: 201, type: SubtaskResponseDto })
+  @ApiResponse({
+    description: 'Subtask restored, no longer in the trash',
+    status: 201,
+    type: SubtaskResponseDto,
+  })
   @ApiErrors(403, 404, 409)
   async restore(
-    @OrgAuth() auth: OrganizationAuthContext,@Param('taskId', ParseUUIDPipe) taskId: string,
-    
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+
     @Param('subtaskId', ParseUUIDPipe) subtaskId: string,
   ): Promise<SubtaskResponseDto> {
     const restored = await this.subtaskService.restore(
@@ -167,7 +181,11 @@ export class SubtaskController {
     summary: 'Get a subtask',
     description: 'One subtask of a task of the active organization.',
   })
-  @ApiResponse({ status: 200, type: SubtaskResponseDto })
+  @ApiResponse({
+    description: 'The subtask',
+    status: 200,
+    type: SubtaskResponseDto,
+  })
   @ApiErrors(403, 404)
   async findSubtask(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -191,7 +209,11 @@ export class SubtaskController {
     description:
       'Updates fields and reassigns the subtask to another team member.',
   })
-  @ApiResponse({ status: 200, type: SubtaskResponseDto })
+  @ApiResponse({
+    description: 'The subtask as updated',
+    status: 200,
+    type: SubtaskResponseDto,
+  })
   @ApiErrors(400, 403, 404)
   async updateSubtask(
     @OrgAuth() auth: OrganizationAuthContext,
@@ -218,7 +240,11 @@ export class SubtaskController {
     summary: 'Delete a subtask',
     description: 'Deletes the subtask with its time entries.',
   })
-  @ApiResponse({ status: 200, type: SubtaskMessageResponseDto })
+  @ApiResponse({
+    description: 'Subtask moved to trash',
+    status: 200,
+    type: SubtaskMessageResponseDto,
+  })
   @ApiErrors(400, 403, 404, 409)
   async removeSubtask(
     @OrgAuth() auth: OrganizationAuthContext,
