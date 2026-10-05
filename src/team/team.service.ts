@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import {
   resolvePage,
   toPaginated,
@@ -24,6 +24,11 @@ import {
   UpdateTeamDto,
   UpdateTeamMemberDto,
 } from './dto/team.dto.js';
+import {
+  restoreBy,
+  softDeleteBy,
+  type TrashEntryDto,
+} from '../common/soft-delete.js';
 
 /**
  * Teams live inside an organization (spec §7). A team member must already be an
@@ -103,9 +108,56 @@ export class TeamService {
     return this.teamRepo.save(team);
   }
 
-  async remove(organizationId: string, teamId: string): Promise<void> {
+  /**
+   * Soft-deletes a team.
+   *
+   * Its memberships and the `teamId` on its tasks are left alone, and that is
+   * the point rather than an oversight. Memberships are an association rather
+   * than content, so there is nothing there to make recoverable -- but keeping
+   * the rows is what lets a restored team come back with the people still on it.
+   * Tasks are unaffected either way: `tasks.team_id` is `ON DELETE SET NULL`.
+   */
+  async remove(
+    organizationId: string,
+    teamId: string,
+    actorId: string,
+  ): Promise<void> {
     await this.findOne(organizationId, teamId);
-    await this.teamRepo.delete(teamId);
+    await softDeleteBy(this.teamRepo, 'id = :id', { id: teamId }, actorId, new Date());
+  }
+
+  async restore(organizationId: string, teamId: string): Promise<Team> {
+    const team = await this.teamRepo.findOne({
+      where: { id: teamId, organizationId },
+      withDeleted: true,
+    });
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    if (!team.deletedAt) {
+      throw new ConflictException('Team is not deleted');
+    }
+
+    await restoreBy(this.teamRepo, 'id = :id', { id: teamId });
+
+    return this.findOne(organizationId, teamId);
+  }
+
+  async listDeleted(organizationId: string): Promise<TrashEntryDto[]> {
+    const rows = await this.teamRepo.find({
+      where: { organizationId, deletedAt: Not(IsNull()) },
+      order: { deletedAt: 'DESC' },
+      withDeleted: true,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      deletedAt: row.deletedAt as Date,
+      deletedBy: row.deletedBy,
+      resource: row.toResponse(),
+    }));
   }
 
   // --- membership -----------------------------------------------------------

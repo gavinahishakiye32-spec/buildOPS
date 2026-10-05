@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -37,9 +42,11 @@ import {
   UpdateTeamDto,
   UpdateTeamMemberDto,
 } from './dto/team.dto.js';
+import { TrashEntryDto } from '../common/soft-delete.js';
 
 const TeamPageDto = PaginatedSchema(TeamResponseDto, 'TeamPage');
 
+@ApiExcludeController()
 @ApiTags('teams')
 @Protected()
 @Controller('teams')
@@ -78,6 +85,55 @@ export class TeamController {
   ): Promise<Paginated<TeamResponseDto>> {
     const page = await this.teamService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((team) => team.toResponse()) };
+  }
+
+
+  /**
+   * Deleted teams, newest first.
+   *
+   * Declared before `/teamId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.TEAM_VIEW)
+  @ApiOperation({
+    summary: 'List deleted teams',
+    description:
+      'Soft-deleted teams, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<TrashEntryDto[]> {
+    return this.teamService.listDeleted(auth.organizationId);
+  }
+
+  @Post(':teamId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.TEAM_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted team',
+    description:
+      'Brings a soft-deleted team back. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: TeamResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('teamId', ParseUUIDPipe) teamId: string,
+  ): Promise<TeamResponseDto> {
+    const restored = await this.teamService.restore(
+      auth.organizationId,
+      teamId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':teamId')
@@ -134,7 +190,11 @@ export class TeamController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('teamId', ParseUUIDPipe) teamId: string,
   ): Promise<TeamMessageResponseDto> {
-    await this.teamService.remove(auth.organizationId, teamId);
+    await this.teamService.remove(
+      auth.organizationId,
+      teamId,
+      auth.userId,
+    );
     return { message: 'Team deleted' };
   }
 

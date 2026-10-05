@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -32,9 +37,15 @@ import {
   TaskResponseDto,
   UpdateTaskDto,
 } from './dto/task.dto.js';
+import {
+  CASCADE_CONFIRMATION,
+  ConfirmCascadeDto,
+  TrashEntryDto,
+} from '../common/soft-delete.js';
 
 const TaskPageDto = PaginatedSchema(TaskResponseDto, 'TaskPage');
 
+@ApiExcludeController()
 @ApiTags('tasks')
 @Protected()
 @Controller('tasks')
@@ -75,6 +86,55 @@ export class TaskController {
   ): Promise<Paginated<TaskResponseDto>> {
     const page = await this.taskService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((task) => task.toResponse()) };
+  }
+
+
+  /**
+   * Deleted tasks, newest first.
+   *
+   * Declared before `/taskId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.TASK_VIEW)
+  @ApiOperation({
+    summary: 'List deleted tasks',
+    description:
+      'Soft-deleted tasks, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<TrashEntryDto[]> {
+    return this.taskService.listDeleted(auth.organizationId);
+  }
+
+  @Post(':taskId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.TASK_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted task',
+    description:
+      'Brings a soft-deleted task back., together with the subtasks and time entries that were deleted with it. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: TaskResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('taskId', ParseUUIDPipe) taskId: string,
+  ): Promise<TaskResponseDto> {
+    const restored = await this.taskService.restore(
+      auth.organizationId,
+      taskId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':taskId')
@@ -127,12 +187,22 @@ export class TaskController {
     description: 'Deletes the task with its subtasks and time entries.',
   })
   @ApiResponse({ status: 200, type: TaskMessageResponseDto })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404, 409)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('taskId', ParseUUIDPipe) taskId: string,
+    @Query() query: ConfirmCascadeDto,
   ): Promise<TaskMessageResponseDto> {
-    await this.taskService.remove(auth.organizationId, taskId);
-    return { message: 'Task deleted' };
+    const result = await this.taskService.remove(
+      auth.organizationId,
+      taskId,
+      auth.userId,
+      query.confirm === CASCADE_CONFIRMATION,
+    );
+
+    // `deleted` is always present, including the 1 for a bare task: a
+    // consistent shape beats an optional one, and a caller that only
+    // wants the message can ignore it.
+    return { message: 'Task deleted', deleted: result.deleted };
   }
 }

@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -32,9 +37,15 @@ import {
   ProjectResponseDto,
   UpdateProjectDto,
 } from './dto/project.dto.js';
+import {
+  CASCADE_CONFIRMATION,
+  ConfirmCascadeDto,
+  TrashEntryDto,
+} from '../common/soft-delete.js';
 
 const ProjectPageDto = PaginatedSchema(ProjectResponseDto, 'ProjectPage');
 
+@ApiExcludeController()
 @ApiTags('projects')
 @Protected()
 @Controller('projects')
@@ -78,6 +89,55 @@ export class ProjectController {
       ...page,
       items: page.items.map((project) => project.toResponse()),
     };
+  }
+
+
+  /**
+   * Deleted projects, newest first.
+   *
+   * Declared before `/projectId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.PROJECT_VIEW)
+  @ApiOperation({
+    summary: 'List deleted projects',
+    description:
+      'Soft-deleted projects, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<TrashEntryDto[]> {
+    return this.projectService.listDeleted(auth.organizationId);
+  }
+
+  @Post(':projectId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.PROJECT_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted project',
+    description:
+      'Brings a soft-deleted project back., together with the subtasks and time entries that were deleted with it. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: ProjectResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ): Promise<ProjectResponseDto> {
+    const restored = await this.projectService.restore(
+      auth.organizationId,
+      projectId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':projectId')
@@ -134,12 +194,22 @@ export class ProjectController {
       'Deletes the project with its tasks, subtasks and time entries.',
   })
   @ApiResponse({ status: 200, type: ProjectMessageResponseDto })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404, 409)
   async remove(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Query() query: ConfirmCascadeDto,
   ): Promise<ProjectMessageResponseDto> {
-    await this.projectService.remove(auth.organizationId, projectId);
-    return { message: 'Project deleted' };
+    const result = await this.projectService.remove(
+      auth.organizationId,
+      projectId,
+      auth.userId,
+      query.confirm === CASCADE_CONFIRMATION,
+    );
+
+    // `deleted` is always present, including the 1 for a bare project: a
+    // consistent shape beats an optional one, and a caller that only
+    // wants the message can ignore it.
+    return { message: 'Project deleted', deleted: result.deleted };
   }
 }

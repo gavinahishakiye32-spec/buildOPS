@@ -10,7 +10,12 @@ import {
   Post,
   Put,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import {
   OrgAuth,
@@ -39,6 +44,7 @@ import {
 } from './dto/role-response.dto.js';
 import { ROLE_TEMPLATES } from './role.service.js';
 
+@ApiExcludeController()
 @ApiTags('roles')
 @Protected()
 @Controller('organizations/:organizationId')

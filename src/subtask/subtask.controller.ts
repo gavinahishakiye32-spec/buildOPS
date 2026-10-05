@@ -11,7 +11,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -35,9 +40,15 @@ import {
   SubtaskResponseDto,
   UpdateSubtaskDto,
 } from './dto/subtask.dto.js';
+import {
+  CASCADE_CONFIRMATION,
+  ConfirmCascadeDto,
+  TrashEntryDto,
+} from '../common/soft-delete.js';
 
 const SubtaskPageDto = PaginatedSchema(SubtaskResponseDto, 'SubtaskPage');
 
+@ApiExcludeController()
 @ApiTags('subtasks')
 @Protected()
 @Controller('tasks/:taskId/subtasks')
@@ -95,6 +106,58 @@ export class SubtaskController {
     );
 
     return subtask.toResponse();
+  }
+
+
+  /**
+   * Deleted subtasks, newest first.
+   *
+   * Declared before `/subtaskId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.SUBTASK_VIEW)
+  @ApiOperation({
+    summary: 'List deleted subtasks',
+    description:
+      'Soft-deleted subtasks, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,@Param('taskId', ParseUUIDPipe) taskId: string,
+    
+  ): Promise<TrashEntryDto[]> {
+    return this.subtaskService.listDeleted(auth.organizationId, taskId);
+  }
+
+  @Post(':subtaskId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.SUBTASK_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted subtask',
+    description:
+      'Brings a soft-deleted subtask back., together with the subtasks and time entries that were deleted with it. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: SubtaskResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,@Param('taskId', ParseUUIDPipe) taskId: string,
+    
+    @Param('subtaskId', ParseUUIDPipe) subtaskId: string,
+  ): Promise<SubtaskResponseDto> {
+    const restored = await this.subtaskService.restore(
+      auth.organizationId,
+      taskId,
+      subtaskId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':subtaskId')
@@ -156,16 +219,24 @@ export class SubtaskController {
     description: 'Deletes the subtask with its time entries.',
   })
   @ApiResponse({ status: 200, type: SubtaskMessageResponseDto })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404, 409)
   async removeSubtask(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Param('subtaskId', ParseUUIDPipe) subtaskId: string,
+    @Query() query: ConfirmCascadeDto,
   ): Promise<SubtaskMessageResponseDto> {
     await this.requireSubtaskOfTask(auth.organizationId, taskId, subtaskId);
-    await this.subtaskService.remove(auth.organizationId, subtaskId);
+    const result = await this.subtaskService.remove(
+      auth.organizationId,
+      subtaskId,
+      auth.userId,
+      query.confirm === CASCADE_CONFIRMATION,
+    );
 
-    return { message: 'Subtask deleted' };
+    // `deleted` counts the time entries logged against the subtask as well as
+    // the subtask itself, so "Subtask deleted, 3" is the honest answer.
+    return { message: 'Subtask deleted', deleted: result.deleted };
   }
 
   /** Ensures the subtask really belongs to the task in the route (no id juggling). */

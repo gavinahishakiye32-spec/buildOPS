@@ -119,4 +119,19 @@ export class SubtaskResponseDto {
 export class SubtaskMessageResponseDto {
   @ApiProperty({ example: 'Subtask deleted' })
   message: string;
+
+  /**
+   * How many records went with the subtask, including the one requested.
+   *
+   * The number matters more than it looks: a project that takes forty tasks and
+   * a hundred hours with it should say so, and a caller that expected one row
+   * and reads four is being told its assumption was wrong.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Records soft-deleted by this request, including the subtask itself. ' +
+      'Absent when the subtask stood alone and took nothing else with it.',
+    example: 4,
+  })
+  deleted?: number;
 }

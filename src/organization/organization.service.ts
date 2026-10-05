@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,9 +12,9 @@ import {
   type Paginated,
   type PaginationQueryDto,
 } from '../common/pagination.dto.js';
+import { PlanLimitService } from '../plan-limit/plan-limit.service.js';
 import { RoleService } from '../role/role.service.js';
 import { SubscriptionService } from '../subscription/subscription.service.js';
-import { PlanLimitService } from '../plan-limit/plan-limit.service.js';
 import { Organization } from './organization.entity.js';
 import {
   CreateOrganizationDto,
@@ -31,8 +32,8 @@ export class OrganizationService {
     @InjectRepository(Organization)
     private readonly organizationRepo: Repository<Organization>,
     private readonly subscriptionService: SubscriptionService,
-    private readonly roleService: RoleService,
     private readonly planLimits: PlanLimitService,
+    private readonly roleService: RoleService,
   ) {}
 
   async listForUser(
@@ -68,12 +69,12 @@ export class OrganizationService {
     userId: string,
     dto: CreateOrganizationDto,
   ): Promise<Organization> {
-    const subscription = await this.subscriptionService.requireForUser(userId);
-
     const name = dto.name.trim();
     if (!name) {
       throw new BadRequestException('Organization name cannot be empty');
     }
+
+    const subscription = await this.subscriptionService.requireForUser(userId);
 
     // The tenant row is locked for the whole operation, so the organization
     // limit and the owner's member seat are checked and consumed atomically.
@@ -120,8 +121,28 @@ export class OrganizationService {
     return this.organizationRepo.save(organization);
   }
 
-  async remove(id: string): Promise<void> {
-    await this.findById(id);
+  /**
+   * Deletes an organization and everything scoped to it. Permanent.
+   *
+   * The soft-delete machinery deliberately stops here. Every other resource can
+   * be restored, but this cascade takes the soft-deleted rows with it, so a
+   * restore performed afterwards has nothing to read. That is a different kind
+   * of operation from the rest of the delete surface and it is guarded by a
+   * string the caller has to produce, not a token.
+   */
+  async remove(id: string, confirmation?: string): Promise<void> {
+    const organization = await this.findById(id);
+
+    if (!confirmation || confirmation.trim() !== organization.name) {
+      throw new ConflictException(
+        'Deleting an organization is permanent: it also discards the ' +
+          'soft-deleted records that could otherwise be restored. Repeat the ' +
+          'request with ?confirm=' +
+          organization.name +
+          ' to confirm.',
+      );
+    }
+
     await this.organizationRepo.delete(id);
   }
 }

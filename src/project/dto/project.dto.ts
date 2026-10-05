@@ -166,4 +166,19 @@ export class ProjectQueryDto extends PaginationQueryDto {
 export class ProjectMessageResponseDto {
   @ApiProperty({ example: 'Project deleted' })
   message: string;
+
+  /**
+   * How many records went with the project, including the one requested.
+   *
+   * The number matters more than it looks: a project that takes forty tasks and
+   * a hundred hours with it should say so, and a caller that expected one row
+   * and reads four is being told its assumption was wrong.
+   */
+  @ApiPropertyOptional({
+    description:
+      'Records soft-deleted by this request, including the project itself. ' +
+      'Absent when the project stood alone and took nothing else with it.',
+    example: 4,
+  })
+  deleted?: number;
 }

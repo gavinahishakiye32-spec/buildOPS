@@ -16,6 +16,11 @@ import { Subtask } from '../subtask/subtask.entity.js';
 import { Task } from '../task/task.entity.js';
 import { TimeEntry } from './time-entry.entity.js';
 import {
+  restoreBy,
+  softDeleteBy,
+  type TrashEntryDto,
+} from '../common/soft-delete.js';
+import {
   CreateTimeEntryDto,
   StartTimerDto,
   StopTimerDto,
@@ -236,21 +241,150 @@ export class TimeEntryService {
     return this.timeEntryRepo.save(entry);
   }
 
+  /**
+   * Soft-deletes one of the caller's own time entries.
+   *
+   * No confirmation: an entry is a leaf, it belongs to the person deleting it,
+   * and it is the correction of a mistake rather than shared content. The
+   * ownership check is unchanged, and the row is flagged so a mis-click is a
+   * restore away.
+   */
   async remove(
     organizationId: string,
     userId: string,
     entryId: string,
   ): Promise<void> {
     await this.findOwnedEntry(organizationId, entryId, userId);
-    await this.timeEntryRepo.delete(entryId);
+    await softDeleteBy(
+      this.timeEntryRepo,
+      'id = :entryId',
+      { entryId },
+      userId,
+      new Date(),
+    );
   }
 
+  /** Restores one of the caller's own deleted entries. */
+  async restore(
+    organizationId: string,
+    userId: string,
+    entryId: string,
+  ): Promise<TimeEntry> {
+    const entry = await this.findOwnedEntry(
+      organizationId,
+      entryId,
+      userId,
+      true,
+    );
+
+    const at = entry.deletedAt;
+
+    if (!at) {
+      throw new ConflictException('Time entry is not deleted');
+    }
+
+    // A live entry under a flagged subtask cannot be read: the subtask filter
+    // hides it. Restoring the parent is the action that actually makes the work
+    // visible again, so point the caller at that rather than producing a row
+    // that looks restored and is not.
+    const subtask = await this.subtaskRepo.findOne({
+      where: { id: entry.subtaskId },
+      withDeleted: true,
+    });
+
+    if (subtask?.deletedAt) {
+      throw new ConflictException(
+        'The subtask this entry was logged against is still deleted. Restore ' +
+          'the subtask instead, which brings back the time logged against it.',
+      );
+    }
+
+    await restoreBy(this.timeEntryRepo, 'id = :entryId', { entryId });
+
+    return this.findOwnedEntry(organizationId, entryId, userId);
+  }
+
+  /** The caller's own deleted entries, newest first. */
+  async listDeleted(
+    organizationId: string,
+    userId: string,
+  ): Promise<TrashEntryDto[]> {
+    // Subqueries, not joins: `withDeleted()` clears the soft-delete filter for
+    // the root alias only, and TypeORM still writes `deleted_at IS NULL` into
+    // the ON clause of each joined alias. A join would hide precisely the
+    // entries whose subtask, task and project all went down together.
+    const rows = await this.timeEntryRepo
+      .createQueryBuilder('entry')
+      .withDeleted()
+      .where(
+        `entry.subtask_id IN (
+           SELECT id FROM subtasks
+            WHERE task_id IN (
+              SELECT id FROM tasks
+               WHERE project_id IN (
+                 SELECT id FROM projects WHERE organization_id = :organizationId
+               )
+            )
+         )`,
+        { organizationId },
+      )
+      .andWhere('entry.user_id = :userId', { userId })
+      .andWhere('entry.deleted_at IS NOT NULL')
+      .orderBy('entry.deleted_at', 'DESC')
+      .getMany();
+
+    return rows.map((row) => ({
+      id: row.id,
+      deletedAt: row.deletedAt as Date,
+      deletedBy: row.deletedBy,
+      resource: row.toResponse(),
+    }));
+  }
+
+  /**
+   * @param includeDeleted set by the restore path, where the row is expected to
+   *   be flagged -- otherwise the lookup would 404 on the very row it is trying
+   *   to bring back.
+   */
   private async findOwnedEntry(
     organizationId: string,
     entryId: string,
     userId: string,
+    includeDeleted = false,
   ): Promise<TimeEntry> {
-    const entry = await this.findOne(organizationId, entryId);
+    // The flagged lookup cannot use the join-based `scopedQuery`. `withDeleted()`
+    // only clears the filter for the root alias, and TypeORM still writes
+    // `deleted_at IS NULL` into the ON clause of every joined alias -- so a
+    // restore would 404 on exactly the entry it is trying to bring back, since
+    // its subtask, task and project are all flagged. Subqueries have no alias to
+    // be filtered and see the rows as they are.
+    const query = includeDeleted
+      ? this.timeEntryRepo
+          .createQueryBuilder('entry')
+          .withDeleted()
+          .where(
+            `entry.subtask_id IN (
+               SELECT id FROM subtasks
+                WHERE task_id IN (
+                  SELECT id FROM tasks
+                   WHERE project_id IN (
+                     SELECT id FROM projects
+                      WHERE organization_id = :organizationId
+                   )
+                )
+             )`,
+            { organizationId },
+          )
+          .andWhere('entry.id = :entryId', { entryId })
+      : this.scopedQuery(organizationId).andWhere('entry.id = :entryId', {
+          entryId,
+        });
+
+    const entry = await query.getOne();
+
+    if (!entry) {
+      throw new NotFoundException('Time entry not found in this organization');
+    }
 
     if (entry.userId !== userId) {
       throw new NotFoundException('Time entry not found in this organization');

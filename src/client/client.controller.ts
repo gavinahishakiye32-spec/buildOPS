@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -34,9 +39,11 @@ import {
   CreateClientDto,
   UpdateClientDto,
 } from './dto/client.dto.js';
+import { TrashEntryDto } from '../common/soft-delete.js';
 
 const ClientPageDto = PaginatedSchema(ClientResponseDto, 'ClientPage');
 
+@ApiExcludeController()
 @ApiTags('clients')
 @Protected()
 @Controller('clients')
@@ -79,6 +86,55 @@ export class ClientController {
       ...page,
       items: page.items.map((client) => client.toResponse()),
     };
+  }
+
+
+  /**
+   * Deleted clients, newest first.
+   *
+   * Declared before `/clientId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.CLIENT_VIEW)
+  @ApiOperation({
+    summary: 'List deleted clients',
+    description:
+      'Soft-deleted clients, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<TrashEntryDto[]> {
+    return this.clientService.listDeleted(auth.organizationId);
+  }
+
+  @Post(':clientId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.CLIENT_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted client',
+    description:
+      'Brings a soft-deleted client back. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: ClientResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+  ): Promise<ClientResponseDto> {
+    const restored = await this.clientService.restore(
+      auth.organizationId,
+      clientId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':clientId')
@@ -139,7 +195,11 @@ export class ClientController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('clientId', ParseUUIDPipe) clientId: string,
   ): Promise<ClientMessageResponseDto> {
-    await this.clientService.remove(auth.organizationId, clientId);
+    await this.clientService.remove(
+      auth.organizationId,
+      clientId,
+      auth.userId,
+    );
     return { message: 'Client deleted' };
   }
 }

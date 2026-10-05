@@ -6,6 +6,7 @@ import { TaskModule } from '../task/task.module.js';
 import { TeamModule } from '../team/team.module.js';
 import { SubtaskController } from './subtask.controller.js';
 import { Subtask } from './subtask.entity.js';
+import { TimeEntry } from '../time-entry/time-entry.entity.js';
 import { SubtaskService } from './subtask.service.js';
 import { AuthorizationModule } from '../auth/authorization.module.js';
 import { AuthModule } from '../auth/auth.module.js';
@@ -14,7 +15,8 @@ import { AuthModule } from '../auth/auth.module.js';
   imports: [
     AuthModule,
     AuthorizationModule,
-    TypeOrmModule.forFeature([Subtask, Task, Project]),
+    // TimeEntry is here for the cascading delete, not for reads.
+    TypeOrmModule.forFeature([Subtask, Task, Project, TimeEntry]),
     // The routes are nested under a task, so the parent task has to be resolved
     // (and its existence proven) before a subtask is read or written.
     TaskModule,

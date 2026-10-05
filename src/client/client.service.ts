@@ -4,8 +4,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { normalizeEmail } from '../common/email.js';
+import {
+  restoreBy,
+  softDeleteBy,
+  type TrashEntryDto,
+} from '../common/soft-delete.js';
 import {
   resolvePage,
   toPaginated,
@@ -106,9 +111,69 @@ export class ClientService {
     return this.clientRepo.save(client);
   }
 
-  async remove(organizationId: string, clientId: string): Promise<void> {
+  /**
+   * Soft-deletes a client.
+   *
+   * No confirmation is required, and none is needed: a client owns no work. Its
+   * projects survive with `clientId: null`, which is the pre-existing behaviour
+   * (`clients -> projects` is `ON DELETE SET NULL`), and because the row is only
+   * flagged they reattach to the client if it is restored.
+   */
+  async remove(
+    organizationId: string,
+    clientId: string,
+    actorId: string,
+  ): Promise<void> {
     await this.findOne(organizationId, clientId);
-    await this.clientRepo.delete(clientId);
+    await softDeleteBy(this.clientRepo, 'id = :id', { id: clientId }, actorId, new Date());
+  }
+
+  /** Brings a deleted client back, projects included. */
+  async restore(
+    organizationId: string,
+    clientId: string,
+  ): Promise<Client> {
+    const client = await this.clientRepo.findOne({
+      where: { id: clientId, organizationId },
+      withDeleted: true,
+    });
+
+    if (!client) {
+      throw new NotFoundException('Client not found');
+    }
+
+    if (!client.deletedAt) {
+      throw new ConflictException('Client is not deleted');
+    }
+
+    // Deleting a client releases its address -- that is the point of the
+    // partial unique index -- so somebody may have taken it in the meantime.
+    // Without this the restore would fail as a raw unique violation, which the
+    // client would see as a 500 and read as "the restore is broken" rather than
+    // "somebody else has that address now".
+    if (client.email) {
+      await this.assertEmailAvailable(client.email, clientId);
+    }
+
+    await restoreBy(this.clientRepo, 'id = :id', { id: clientId });
+
+    return this.findOne(organizationId, clientId);
+  }
+
+  /** Deleted clients, newest first, so a restore endpoint is reachable. */
+  async listDeleted(organizationId: string): Promise<TrashEntryDto[]> {
+    const rows = await this.clientRepo.find({
+      where: { organizationId, deletedAt: Not(IsNull()) },
+      order: { deletedAt: 'DESC' },
+      withDeleted: true,
+    });
+
+    return rows.map((row) => ({
+      id: row.id,
+      deletedAt: row.deletedAt as Date,
+      deletedBy: row.deletedBy,
+      resource: row.toResponse(),
+    }));
   }
 
   private async assertEmailAvailable(

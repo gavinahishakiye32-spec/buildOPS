@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -34,9 +39,11 @@ import {
   CreateBadgeDto,
   UpdateBadgeDto,
 } from './dto/badge.dto.js';
+import { TrashEntryDto } from '../common/soft-delete.js';
 
 const BadgePageDto = PaginatedSchema(BadgeResponseDto, 'BadgePage');
 
+@ApiExcludeController()
 @ApiTags('badges')
 @Protected()
 @Controller('badges')
@@ -77,6 +84,55 @@ export class BadgeController {
   ): Promise<Paginated<BadgeResponseDto>> {
     const page = await this.badgeService.list(auth.organizationId, query);
     return { ...page, items: page.items.map((badge) => badge.toResponse()) };
+  }
+
+
+  /**
+   * Deleted badges, newest first.
+   *
+   * Declared before `/badgeId` on purpose. A `trash` route registered after a
+   * parameterised one is unreachable: the parameter route matches the literal
+   * string `trash` first, and the UUID pipe rejects it.
+   */
+  @Get('trash')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.BADGE_VIEW)
+  @ApiOperation({
+    summary: 'List deleted badges',
+    description:
+      'Soft-deleted badges, with when each was deleted and who deleted it. ' +
+      'These rows are excluded from every ordinary read.',
+  })
+  @ApiResponse({ status: 200, type: [TrashEntryDto] })
+  @ApiErrors(403)
+  async trash(
+    @OrgAuth() auth: OrganizationAuthContext,
+  ): Promise<TrashEntryDto[]> {
+    return this.badgeService.listDeleted(auth.organizationId);
+  }
+
+  @Post(':badgeId/restore')
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.BADGE_UPDATE)
+  @ApiOperation({
+    summary: 'Restore a deleted badge',
+    description:
+      'Brings a soft-deleted badge back. ' +
+      'Only the records removed by that same delete are restored, so anything ' +
+      'deleted on purpose afterwards stays deleted.',
+  })
+  @ApiResponse({ status: 201, type: BadgeResponseDto })
+  @ApiErrors(403, 404, 409)
+  async restore(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('badgeId', ParseUUIDPipe) badgeId: string,
+  ): Promise<BadgeResponseDto> {
+    const restored = await this.badgeService.restore(
+      auth.organizationId,
+      badgeId,
+    );
+
+    return restored.toResponse();
   }
 
   @Get(':badgeId')
@@ -132,7 +188,11 @@ export class BadgeController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('badgeId', ParseUUIDPipe) badgeId: string,
   ): Promise<BadgeMessageResponseDto> {
-    await this.badgeService.remove(auth.organizationId, badgeId);
+    await this.badgeService.remove(
+      auth.organizationId,
+      badgeId,
+      auth.userId,
+    );
     return { message: 'Badge deleted' };
   }
 }

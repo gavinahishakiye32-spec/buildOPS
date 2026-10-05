@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
+import { SoftDeletePurgeService } from './common/soft-delete-purge.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENTITIES } from './common/entities.js';
 import { MIGRATIONS } from './database/migrations.js';
@@ -88,6 +89,10 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
   controllers: [AppController],
   providers: [
     AppService,
+    // Retention for soft-deleted rows (spec §22). Lives in the root module
+    // because it spans every soft-deletable table rather than belonging to any
+    // one of them.
+    SoftDeletePurgeService,
     // Global rate limiting (spec §17): `default` for the API surface and the
     // stricter `auth` bucket enforced with @Throttle on credential routes.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
