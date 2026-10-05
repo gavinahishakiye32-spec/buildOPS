@@ -21,7 +21,12 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register node_modules/.bin/jest --runInBand",
     "test:e2e": "NODE_OPTIONS=--experimental-vm-modules jest --config ./test/jest-e2e.json",
     "docs:openapi": "NODE_OPTIONS=--experimental-vm-modules OPENAPI_WRITE=1 jest --config ./test/jest-e2e.json test/openapi-artifact.e2e-spec.ts && npm run docs:reference",
-    "docs:reference": "node scripts/api-reference.mjs"
+    "docs:reference": "node scripts/api-reference.mjs",
+    "typeorm": "node --env-file-if-exists=.env ./node_modules/typeorm/cli.js -d dist/database/data-source.js",
+    "migration:run": "npm run build && npm run typeorm -- migration:run",
+    "migration:revert": "npm run build && npm run typeorm -- migration:revert",
+    "migration:generate": "npm run build && npm run typeorm -- migration:generate",
+    "migration:show": "npm run build && npm run typeorm -- migration:show"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

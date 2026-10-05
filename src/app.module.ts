@@ -8,7 +8,7 @@ import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { ENTITIES } from './common/entities.js';
-import { isProduction } from './common/env.js';
+import { MIGRATIONS } from './database/migrations.js';
 import { PlanModule } from './plan/plan.module.js';
 import { SubscriptionModule } from './subscription/subscription.module.js';
 
@@ -37,10 +37,16 @@ import { DashboardModule } from './dashboard/dashboard.module.js';
         password: config.get<string>('DB_PASSWORD') || 'postgres',
         database: config.get<string>('DB_DATABASE', 'ops'),
         entities: ENTITIES,
-        // Schema synchronization is a development convenience only: it derives
-        // tables from the entities and can drop columns on rename. Production
-        // uses the migrations/schema in schema.sql instead.
-        synchronize: !isProduction(config),
+        // The schema comes from versioned migrations, never from `synchronize`:
+        // synchronizing derives DDL from the entities on every boot, so a
+        // renamed column silently became a dropped column and no schema change
+        // could be reviewed before it touched real data. `migrationsRun` applies
+        // pending migrations at boot, which is what lets the e2e suites keep
+        // truncating a database they do not build.
+        migrationsRun: true,
+        migrations: MIGRATIONS,
+        migrationsTableName: 'migrations',
+        synchronize: false,
       }),
       inject: [ConfigService],
     }),
