@@ -44,6 +44,7 @@ export class PermissionsGuard implements CanActivate {
       organizationId: null,
       roleId: null,
       permissions: [],
+      sessionId: request.user?.sessionId,
     };
     request.authContext = authContext;
 

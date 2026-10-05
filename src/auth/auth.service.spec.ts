@@ -12,6 +12,7 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { AuthService } from './auth.service.js';
 import { UserService } from '../user/user.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { SessionService } from './session.service.js';
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -36,6 +37,15 @@ describe('AuthService', () => {
   let mailService: {
     sendVerificationEmail: any;
     sendResetPasswordEmail: any;
+  };
+
+  let sessionService: {
+    issue: any;
+    rotate: any;
+    revokeByToken: any;
+    revokeAllForUser: any;
+    isFamilyActive: any;
+    listForUser: any;
   };
 
   const mockUser = {
@@ -84,6 +94,19 @@ describe('AuthService', () => {
       sendResetPasswordEmail: jest.fn(async () => {}),
     };
 
+    sessionService = {
+      issue: jest.fn(async () => ({
+        token: 'refresh-token',
+        familyId: 'family-1',
+        expiresAt: new Date(Date.now() + 86_400_000),
+      })),
+      rotate: jest.fn(),
+      revokeByToken: jest.fn(async () => undefined),
+      revokeAllForUser: jest.fn(async () => 0),
+      isFamilyActive: jest.fn(async () => true),
+      listForUser: jest.fn(async () => []),
+    };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -98,6 +121,10 @@ describe('AuthService', () => {
         {
           provide: MailService,
           useValue: mailService,
+        },
+        {
+          provide: SessionService,
+          useValue: sessionService,
         },
       ],
     }).compile();
@@ -172,10 +199,13 @@ describe('AuthService', () => {
           '$2b$10$9..eefpF/TxhmA.ntLxcVO7.LaqDQe7LMA6QwxfqKFDWN4saVicPO',
       });
 
-      const result = await authService.login({
-        email: 'test@example.com',
-        password: 'password123',
-      });
+      const result = await authService.login(
+        {
+          email: 'test@example.com',
+          password: 'password123',
+        },
+        { userAgent: 'jest', ip: '127.0.0.1' },
+      );
 
       expect(result.access_token).toBe('signed-token');
       expect(userService.setVerificationToken).not.toHaveBeenCalled();
@@ -191,10 +221,13 @@ describe('AuthService', () => {
       });
 
       await expect(
-        authService.login({
-          email: 'test@example.com',
-          password: 'password123',
-        }),
+        authService.login(
+          {
+            email: 'test@example.com',
+            password: 'password123',
+          },
+          { userAgent: 'jest', ip: '127.0.0.1' },
+        ),
       ).rejects.toBeInstanceOf(ForbiddenException);
 
       expect(jwtService.sign).not.toHaveBeenCalled();
@@ -219,10 +252,13 @@ describe('AuthService', () => {
       userService.findByEmail.mockResolvedValue(null);
 
       await expect(
-        authService.login({
-          email: 'missing@example.com',
-          password: 'x',
-        }),
+        authService.login(
+          {
+            email: 'missing@example.com',
+            password: 'x',
+          },
+          { userAgent: 'jest', ip: '127.0.0.1' },
+        ),
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
@@ -230,10 +266,13 @@ describe('AuthService', () => {
       userService.findByEmail.mockResolvedValue(mockUser);
 
       await expect(
-        authService.login({
-          email: 'test@example.com',
-          password: 'wrong',
-        }),
+        authService.login(
+          {
+            email: 'test@example.com',
+            password: 'wrong',
+          },
+          { userAgent: 'jest', ip: '127.0.0.1' },
+        ),
       ).rejects.toBeInstanceOf(UnauthorizedException);
 
       expect(userService.setVerificationToken).not.toHaveBeenCalled();

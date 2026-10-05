@@ -9,6 +9,14 @@ export interface AuthenticatedUser {
   status: string | null;
   organizationId: string | null;
   isVerified: boolean;
+  /**
+   * The session this access token belongs to, from the token's `sid` claim.
+   *
+   * The strategy has already checked it is still alive; carrying it on the
+   * request lets endpoints that act on the current session -- the sessions
+   * list, and anything that revokes it -- know which one this is.
+   */
+  sessionId: string;
 }
 
 /**
@@ -20,6 +28,8 @@ export interface AuthContext {
   organizationId: string | null;
   roleId: string | null;
   permissions: PermissionName[];
+  /** Session behind the presented access token; see `AuthenticatedUser.sessionId`. */
+  sessionId: string;
 }
 
 export interface AuthenticatedRequest extends Request {

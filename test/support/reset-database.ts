@@ -14,6 +14,7 @@ import type { DataSource } from 'typeorm';
  * and wiping it would take out the fixture those tests are built on.
  */
 const TABLES = [
+  'refresh_tokens',
   'time_entries',
   'time_complexity',
   'subtasks',

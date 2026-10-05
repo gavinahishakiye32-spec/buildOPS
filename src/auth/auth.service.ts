@@ -20,6 +20,8 @@ import {
   SELF_EDITABLE_USER_STATUSES,
   isSelfEditableStatus,
 } from '../common/enums.js';
+import { SessionService } from './session.service.js';
+import type { SessionClient } from './session.service.js';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -30,6 +32,7 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
+    private readonly sessionService: SessionService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -52,7 +55,7 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, client: SessionClient) {
     const user = await this.userService.findByEmail(dto.email);
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
@@ -70,8 +73,99 @@ export class AuthService {
       );
     }
 
-    const token = this.signToken(user.id, user.email);
-    return { access_token: token };
+    const session = await this.sessionService.issue(user.id, client);
+    const token = this.signToken(user.id, user.email, session.familyId);
+
+    return { access_token: token, session };
+  }
+
+  /**
+   * Exchanges a refresh token for a new access token and a new refresh token.
+   *
+   * Every failure here is the same 401 with the same message, including reuse
+   * detection, because the caller is an opaque cookie to us: the reason a token
+   * died is not something an attacker probing the endpoint should be able to
+   * read off the response.
+   */
+  async refresh(token: string, client: SessionClient) {
+    const result = await this.sessionService.rotate(token, client);
+
+    if (!result.ok) {
+      throw new UnauthorizedException(
+        'Session expired or revoked. Please log in again.',
+      );
+    }
+
+    // The account is re-read on every refresh. The access token is stateless, so
+    // this is the one moment a deactivated, unverified or deleted account stops
+    // being able to mint new tokens -- and the moment a password change can
+    // actually end the attacker's session.
+    const user = await this.userService.findById(result.record.userId);
+
+    if (!user || !user.isVerified) {
+      await this.sessionService.revokeAllForUser(
+        result.record.userId,
+        'password_changed',
+      );
+      throw new UnauthorizedException(
+        'Session expired or revoked. Please log in again.',
+      );
+    }
+
+    return {
+      access_token: this.signToken(
+        user.id,
+        user.email,
+        result.record.familyId,
+      ),
+      session: {
+        token: result.token,
+        familyId: result.record.familyId,
+        expiresAt: result.record.expiresAt,
+      },
+    };
+  }
+
+  /**
+   * Ends one session.
+   *
+   * Idempotent and silent when there is no cookie, because "log out" is often
+   * fired by a page whose session has already expired and a 400 there would
+   * leave the customer staring at an error instead of a signed-out app.
+   */
+  async logout(token: string | null): Promise<{ message: string }> {
+    if (token) {
+      await this.sessionService.revokeByToken(token, 'logout');
+    }
+
+    return { message: 'Logged out' };
+  }
+
+  /**
+   * Ends every session for the user, including the one making the request.
+   *
+   * This is the "my account might be compromised" control, and it is the reason
+   * the access token carries its session id: the tokens already issued stay
+   * cryptographically valid until they expire, so without that claim a
+   * sign-out-everywhere would not stop anyone holding one.
+   */
+  async logoutAll(userId: string): Promise<{ message: string }> {
+    const revoked = await this.sessionService.revokeAllForUser(userId, 'logout_all');
+    return { message: `Logged out of ${revoked} session(s)` };
+  }
+
+  /** Live sessions, for the "where am I signed in" screen. */
+  async sessions(userId: string, familyId: string | null) {
+    const live = await this.sessionService.listForUser(userId, familyId);
+
+    return live.map((session) => ({
+      id: session.id,
+      userAgent: session.userAgent,
+      ip: session.ip,
+      createdAt: session.createdAt.toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
+      isCurrent: session.isCurrent,
+    }));
   }
 
   async getProfile(userId: string) {
@@ -169,10 +263,26 @@ export class AuthService {
       await this.issueVerificationToken(updated);
     }
 
+    if (hasPassword) {
+      // Every session, including the one making the change: someone who just
+      // changed the password because they spotted an intruder should not be
+      // sharing a browser session with them.
+      await this.sessionService.revokeAllForUser(userId, 'password_changed');
+    }
+
     return updated.toResponse();
   }
 
   async verifyEmail(token: string) {
+    // `hashToken` calls `createHash().update()`, which throws a TypeError on
+    // `undefined`. Guarding here keeps a missing `?token=` a documented 400
+    // instead of an unhandled 500.
+    if (!token) {
+      throw new BadRequestException(
+        'Verification token is required. Read it from the ?token= link sent by email.',
+      );
+    }
+
     const user = await this.userService.findByVerificationToken(
       this.hashToken(token),
     );
@@ -226,6 +336,13 @@ export class AuthService {
     }
 
     await this.userService.updatePassword(user.id, dto.password);
+
+    // A reset is what a customer reaches for when they think somebody else has
+    // their password, so it has to end that somebody's session. Without this the
+    // attacker's refresh token keeps working and the reset achieves nothing
+    // except locking the legitimate owner out.
+    await this.sessionService.revokeAllForUser(user.id, 'password_changed');
+
     return { message: 'Password reset successfully' };
   }
 
@@ -241,8 +358,21 @@ export class AuthService {
       .catch(() => undefined);
   }
 
-  private signToken(userId: string, email: string): string {
-    return this.jwtService.sign({ sub: userId, email });
+  /**
+   * `sid` is the session the token belongs to.
+   *
+   * It is what makes revocation possible at all: a signed access token stays
+   * valid to anybody who holds it until it expires, so the only way "log out
+   * everywhere" can stop a token already in the wild is for the server to be
+   * able to check whether the session behind it is still alive. The strategy
+   * does that on every request.
+   */
+  private signToken(
+    userId: string,
+    email: string,
+    sid: string,
+  ): string {
+    return this.jwtService.sign({ sub: userId, email, sid });
   }
 
   private generateToken(): string {

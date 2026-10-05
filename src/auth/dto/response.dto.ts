@@ -58,3 +58,37 @@ export class MessageResponseDto {
   @ApiProperty({ example: 'Operation completed successfully' })
   message: string;
 }
+
+/** One live session, as shown on a "where am I signed in" screen. */
+export class SessionResponseDto {
+  @ApiProperty({
+    description: 'Session id. Matches the `sid` claim of the current access token.',
+  })
+  id: string;
+
+  @ApiProperty({
+    description: 'User agent of the client that created the session, as reported by that client.',
+    nullable: true,
+    type: String,
+  })
+  userAgent: string | null;
+
+  @ApiProperty({
+    description: 'IP the session was created from, or null when it could not be determined.',
+    nullable: true,
+    type: String,
+  })
+  ip: string | null;
+
+  @ApiProperty({ description: 'When this device signed in.' })
+  createdAt: string;
+
+  @ApiProperty({
+    description:
+      'When this session stops being refreshable. Absolute, not sliding: a session does not extend itself by being used.',
+  })
+  expiresAt: string;
+
+  @ApiProperty({ description: 'True for the session making this request.' })
+  isCurrent: boolean;
+}
