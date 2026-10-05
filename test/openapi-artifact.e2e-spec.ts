@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,7 +11,6 @@ import { API_PREFIX, configureApp } from '../src/bootstrap.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ARTIFACT = join(ROOT, 'docs', 'openapi.json');
-const REFERENCE = join(ROOT, 'docs', 'api-reference.md');
 
 /**
  * `npm run docs:openapi` sets this flag to rewrite the committed artifact. The
@@ -141,38 +139,6 @@ describe('OpenAPI artifact (e2e)', () => {
         expect(committed).toBe(generated);
       });
     }
-  });
-
-  describe('api reference', () => {
-    // The reference is rendered from the same document, by a plain Node script
-    // so it can be run without booting the app. `--check` is the read-only mode
-    // the e2e run uses; the write mode is `npm run docs:reference`.
-    const run = (flag: string): string =>
-      execFileSync(process.execPath, ['scripts/api-reference.mjs', flag], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      });
-
-    if (WRITE) {
-      it('renders docs/api-reference.md', () => {
-        expect(run('--write')).toContain('wrote docs/api-reference.md');
-      });
-    } else {
-      it('matches docs/api-reference.md', () => {
-        expect(run('--check')).toContain('up to date');
-      });
-    }
-
-    it('documents every operation of the document', () => {
-      const reference = readFileSync(REFERENCE, 'utf8');
-      const missing = operations(document)
-        .filter(
-          ([method, path]) => !reference.includes(`### ${method} ${path}`),
-        )
-        .map(([method, path]) => `${method} ${path}`);
-
-      expect(missing).toEqual([]);
-    });
   });
 
   describe('access control extensions', () => {

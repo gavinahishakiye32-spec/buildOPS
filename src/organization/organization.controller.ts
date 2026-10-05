@@ -14,7 +14,10 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ConfirmOrganizationDeletionDto } from '../common/soft-delete.js';
 import { Auth, SkipOrganization } from '../common/decorators/auth.decorator.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import {
   OrganizationHeader,
   Protected,
@@ -39,6 +42,7 @@ const OrganizationPageDto = PaginatedSchema(
   'OrganizationPage',
 );
 
+@ApiRateLimited()
 @ApiTags('organizations')
 @Protected()
 @Controller('organizations')

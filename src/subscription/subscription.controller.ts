@@ -17,7 +17,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Auth, SkipOrganization } from '../common/decorators/auth.decorator.js';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import { Protected } from '../common/decorators/protected.decorator.js';
 import type { AuthContext } from '../common/types.js';
 import { SubscriptionService } from './subscription.service.js';
@@ -32,6 +35,7 @@ import {
 } from './dto/subscription-response.dto.js';
 import type { SubscriptionResponse } from './subscription.entity.js';
 
+@ApiRateLimited()
 @ApiTags('subscription')
 // `@Protected()` already contributes `ApiBearerAuth`; declaring it here too
 // emitted the security requirement twice on every operation.

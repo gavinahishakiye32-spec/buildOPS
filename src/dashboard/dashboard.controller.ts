@@ -1,5 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
 import {
@@ -21,6 +26,7 @@ import {
   DashboardQueryDto,
 } from './dto/dashboard.dto.js';
 
+@ApiExcludeController()
 @ApiTags('dashboard')
 @Protected()
 @Controller('dashboard')

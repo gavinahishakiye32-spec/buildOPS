@@ -11,6 +11,10 @@ import { JwtStrategy } from '../src/auth/jwt.strategy.js';
 import { MailService } from '../src/mail/mail.service.js';
 import { UserService } from '../src/user/user.service.js';
 import { setupSwagger } from '../src/swagger.setup.js';
+import { SessionService } from '../src/auth/session.service.js';
+import { SessionCookies } from '../src/auth/session-cookies.js';
+import { RefreshToken } from '../src/auth/refresh-token.entity.js';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 interface OpenApiDocument {
   openapi: string;
@@ -224,41 +228,47 @@ class InMemoryUserService {
   }
 }
 
+/**
+ * The status codes each auth endpoint documents, cross-checked against real
+ * responses further down this file. `429` is included because ThrottlerGuard is
+ * global in `AppModule`; the isolated app below does not register the throttler,
+ * so no test here exercises it.
+ */
 const endpointDocumentation = [
   {
     path: '/auth/register',
     method: 'post',
-    documentedStatus: ['201', '409'],
+    documentedStatus: ['201', '400', '409', '429'],
   },
   {
     path: '/auth/login',
     method: 'post',
-    documentedStatus: ['201', '401', '403'],
+    documentedStatus: ['201', '400', '401', '403', '429'],
   },
   {
     path: '/auth/verify-email',
     method: 'get',
-    documentedStatus: ['200', '400'],
+    documentedStatus: ['200', '400', '429'],
   },
   {
     path: '/auth/forgot-password',
     method: 'post',
-    documentedStatus: ['201'],
+    documentedStatus: ['201', '400', '429'],
   },
   {
     path: '/auth/reset-password',
     method: 'post',
-    documentedStatus: ['201', '400'],
+    documentedStatus: ['201', '400', '429'],
   },
   {
     path: '/auth/profile',
     method: 'get',
-    documentedStatus: ['200', '401'],
+    documentedStatus: ['200', '401', '429'],
   },
   {
     path: '/auth/profile',
     method: 'patch',
-    documentedStatus: ['200', '400', '401', '409'],
+    documentedStatus: ['200', '400', '401', '409', '429'],
   },
 ] as const;
 
@@ -313,9 +323,55 @@ describe('Swagger documentation (e2e)', () => {
     return { access_token: loginRes.body.access_token as string };
   };
 
+  /**
+   * Just enough repository for the auth flows this suite drives.
+   *
+   * It mounts AuthController without a database, because its subject is the
+   * generated document rather than session behaviour -- the rotation, reuse
+   * detection and revocation rules are covered in `contract.e2e-spec.ts` and
+   * `session.service.spec.ts` against real PostgreSQL. What is needed here is
+   * just that `POST /auth/login` can mint a session instead of throwing.
+   */
+  let refreshTokenRows: Array<Record<string, unknown>> = [];
+
+  /** Registers a live session, so a hand-signed token with a `sid` is accepted. */
+  const seedSession = (familyId: string): string => {
+    refreshTokenRows.push({
+      id: `seeded-${familyId}`,
+      familyId,
+      revokedAt: null,
+    });
+    return familyId;
+  };
+
+  const fakeRefreshTokenRepository = () => {
+    // The same array the suite seeds through `seedSession`, so a token the test
+    // signed itself and a token minted by login are indistinguishable to the
+    // strategy -- which is the point.
+    const rows = refreshTokenRows;
+
+    return {
+      create: (values: Record<string, unknown>) => ({ ...values }),
+      save: async (record: Record<string, unknown>) => {
+        const row = { id: `row-${rows.length}`, ...record };
+        rows.push(row);
+        return row;
+      },
+      findOne: async () => null,
+      find: async () => rows.filter((row) => row.revokedAt == null),
+      // The JWT strategy asks this on every authenticated request, so a fake
+      // answering 0 would make the whole suite 401 rather than exercise the
+      // routes it is about.
+      count: async () => rows.filter((row) => row.revokedAt == null).length,
+      update: async () => ({ affected: 0 }),
+      delete: async () => ({ affected: 0 }),
+    };
+  };
+
   beforeEach(async () => {
     mailTokens.verify = undefined;
     mailTokens.reset = undefined;
+    refreshTokenRows = [];
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
@@ -365,6 +421,17 @@ describe('Swagger documentation (e2e)', () => {
               mailTokens.reset = token;
             },
           },
+        },
+
+        // This suite mounts AuthController on its own rather than through
+        // AuthModule, so it has to supply the session collaborators itself.
+        SessionService,
+
+        SessionCookies,
+
+        {
+          provide: getRepositoryToken(RefreshToken),
+          useValue: fakeRefreshTokenRepository(),
         },
       ],
     }).compile();
@@ -452,6 +519,54 @@ describe('Swagger documentation (e2e)', () => {
       ]) {
         expect(schemas[model]).toBeDefined();
       }
+    });
+
+    it('documents the error envelope exactly as the server sends it', async () => {
+      const res = await request(server).get('/api/v1/docs-json').expect(200);
+
+      const doc = res.body as OpenApiDocument;
+      const schema = doc.components.schemas['ErrorResponseDto'] as
+        | { properties?: Record<string, unknown>; required?: string[] }
+        | undefined;
+
+      expect(Object.keys(schema?.properties ?? {}).sort()).toEqual([
+        'error',
+        'message',
+        'statusCode',
+      ]);
+      // `error` is optional on purpose: Nest omits it on the 401 of a rejected
+      // JWT and on every 429.
+      expect(schema?.required?.sort()).toEqual(['message', 'statusCode']);
+    });
+
+    it('returns the error envelope with and without `error`, as documented', async () => {
+      // Business error, thrown with a message: `error` is present.
+      await registerUser('envelope@example.com');
+
+      const conflict = await request(server)
+        .post('/auth/register')
+        .send({ email: 'envelope@example.com', password: 'password123' })
+        .expect(409);
+
+      expect(conflict.body).toEqual({
+        statusCode: 409,
+        error: 'Conflict',
+        message: 'Email already registered',
+      });
+
+      // Rejected token: the strategy throws `new UnauthorizedException()`, which
+      // Nest answers with `statusCode` and `message` only.
+      const rejected = await request(server)
+        .get('/auth/profile')
+        .set('Authorization', 'Bearer not-a-real-token')
+        .expect(401);
+
+      expect(rejected.body).toEqual({
+        statusCode: 401,
+        message: 'Unauthorized',
+      });
+
+      expect(rejected.body.error).toBeUndefined();
     });
   });
 
@@ -633,6 +748,18 @@ describe('Swagger documentation (e2e)', () => {
         })
         .expect(400);
     });
+
+    it('returns the documented 400 error body when the token is missing', async () => {
+      // Regression: `createHash().update(undefined)` threw, so a missing
+      // `?token=` answered 500 instead of the documented 400.
+      const res = await request(server).get('/auth/verify-email').expect(400);
+
+      expect(res.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: expect.stringContaining('token is required'),
+      });
+    });
   });
 
   describe('POST /auth/forgot-password', () => {
@@ -750,9 +877,17 @@ describe('Swagger documentation (e2e)', () => {
 
       const userId = res.body.user.id as string;
 
+      // The token is signed here rather than obtained from login, so it has to
+      // be given a session explicitly: an access token with no `sid` is refused
+      // before the account is even looked at, because such a token could never
+      // be revoked.
       const token = app
         .get(JwtService)
-        .sign({ sub: userId, email: 'pat@example.com' });
+        .sign({
+          sub: userId,
+          email: 'pat@example.com',
+          sid: seedSession('family-unverified-check'),
+        });
 
       await request(server)
         .get('/auth/profile')

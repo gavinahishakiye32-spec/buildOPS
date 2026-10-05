@@ -10,7 +10,12 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiExcludeController,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PaginatedSchema } from '../common/dto/paginated-response.dto.js';
 import { PERMISSIONS } from '../common/permissions.js';
 import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
@@ -39,6 +44,7 @@ const TimeComplexityPageDto = PaginatedSchema(
   'TimeComplexityPage',
 );
 
+@ApiExcludeController()
 @ApiTags('time-complexity')
 @Protected()
 @Controller('time-complexity')

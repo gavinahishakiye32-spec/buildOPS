@@ -12,7 +12,10 @@ import {
 import type { Request as HttpRequest, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { ApiErrors } from '../common/decorators/api-errors.decorator.js';
+import {
+  ApiErrors,
+  ApiRateLimited,
+} from '../common/decorators/api-errors.decorator.js';
 import { ErrorResponseDto } from '../common/dto/error-response.dto.js';
 import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -36,6 +39,7 @@ import {
 } from './session-cookies.js';
 import type { AuthenticatedRequest } from '../common/types.js';
 
+@ApiRateLimited()
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {

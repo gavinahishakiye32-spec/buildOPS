@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiRateLimited } from '../common/decorators/api-errors.decorator.js';
 import { PlanService } from './plan.service.js';
 import { PlanResponseDto } from './dto/plan-response.dto.js';
 
+@ApiRateLimited()
 @ApiTags('plans')
 @Controller('plans')
 export class PlanController {

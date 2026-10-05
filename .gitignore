@@ -12,6 +12,7 @@ dist/
 
 # coverage
 coverage/
+coverage-e2e/
 
 # logs
 *.log
