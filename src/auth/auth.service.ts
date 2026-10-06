@@ -97,6 +97,19 @@ export class AuthService {
       });
     }
 
+    return this.establishSession(user, client);
+  }
+
+  /**
+   * Starts a session for a user who has just been authenticated by something
+   * other than their password: an invitation token, for instance, which proves
+   * control of the mailbox just as well as the password that login checks.
+   *
+   * One implementation, so every entry point mints the same access token and
+   * the same refresh record, and a caller cannot tell from the response which
+   * of the two got them in.
+   */
+  async establishSession(user: User, client: SessionClient) {
     const session = await this.sessionService.issue(user.id, client);
     const token = this.signToken(user.id, user.email, session.familyId);
 

@@ -2439,26 +2439,28 @@ describe('published contract vs runtime (e2e)', () => {
       expect(created.status).toBe(201);
       const token = created.body.invitationToken as string;
 
-      // An address with no account behind it: the credentials are what create
-      // that account, so accepting without them is a 400, not a half-made member.
+      // An address with no account behind it: the password is what creates
+      // that account, so accepting without one is a 400, not a half-made member.
       await probe(
         'post',
         '/invitations/accept',
         (req) => req.send({ token }),
         '400',
-        'new account without credentials',
+        'new account without a password',
       );
 
+      // No name, no email: the invitation already knows the address, and the
+      // password is the whole registration form.
       const accepted = await probe(
         'post',
         '/invitations/accept',
-        (req) =>
-          req.send({ token, name: 'New Hire', password: 'Someone123!' }),
+        (req) => req.send({ token, password: 'Someone123!' }),
         '201',
-        'new account created and invited',
+        'new account created, invited and signed in',
       );
       expect(accepted.body).toMatchObject({
         message: 'Invitation accepted',
+        access_token: expect.any(String),
         organizationId,
         roleId: expect.any(String),
         roleName: expect.any(String),
@@ -2467,8 +2469,7 @@ describe('published contract vs runtime (e2e)', () => {
       await probe(
         'post',
         '/invitations/accept',
-        (req) =>
-          req.send({ token, name: 'New Hire', password: 'Someone123!' }),
+        (req) => req.send({ token, password: 'Someone123!' }),
         '409',
         'replayed token',
       );

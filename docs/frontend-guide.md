@@ -428,8 +428,11 @@ Consequences for the frontend:
    /invitations/accept?token=…` is the preview the landing page should call to
    show who invited whom, under which role, and whether the address already has
    an account; `POST /invitations/accept` is what actually creates the
-   membership. Own an `/invitations/accept?token=…` route, keep the token out of
-   analytics, and be ready for `409` when the link has already been used.
+   membership **and signs the invitee in** — it answers `access_token` and sets
+   the same httpOnly refresh cookie `POST /auth/login` does, so store and
+   refresh it exactly like a login. Own an `/invitations/accept?token=…` route,
+   keep the token out of analytics, and be ready for `409` when the link has
+   already been used.
 4. Tokens are opaque 32-byte hex strings, valid once, and stored hashed. They
    arrive in the query string — strip them from client-side analytics and logs.
 5. **Outside production** the API returns the same links in JSON as well:
@@ -562,9 +565,18 @@ POST /organizations  { name, status? }        (creator receives the Owner role)
 POST /organizations/{organizationId}/members      { userId | email, templateKey }
   — or, when the address has no account yet —
 POST /organizations/{organizationId}/invitations  { email, templateKey? }
-      ↓ the invitee opens the emailed /api/v1/invitations/accept?token=…
-POST /invitations/accept  { token, name?, password? }   (creates the account and the role)
+      ↓ the invitee clicks "Accept invitation" in the email
+GET  /invitations/accept?token=…                  (who, which role, has account?)
+      ↓ your page shows the invited address and a password field
+POST /invitations/accept  { token, password, name? }  → access_token (signed in)
 ```
+
+The invitee never registers in the ordinary sense: the form they land on shows
+the address they were invited on (it is in the preview, so nothing is typed
+twice) and asks for a password; `name` is optional. Submitting creates the
+account, creates the role and answers with an `access_token` plus the refresh
+cookie, so the click that joins them is also the sign-in. From then on they log
+in with that address and password like anyone else.
 
 `POST /members` and `POST /invitations` are two doors into the same room: the
 first grants access to an account that already exists (and `404`s when the email
@@ -853,7 +865,7 @@ API serves but the Swagger document does not yet list.
 | `GET`  | `/auth/reset-password`  | `?token`                     | `200 { message }`       | `400`               |
 | `GET`  | `/plans`                | —                            | `200 PlanResponseDto[]` | —                   |
 | `GET`  | `/invitations/accept`   | `?token`                     | `200 InvitationPreviewResponseDto` | `400`, `409` |
-| `POST` | `/invitations/accept`   | `{ token, name?, password? }` | `201 { message, organizationId, roleId, roleName }` | `400`, `409` |
+| `POST` | `/invitations/accept`   | `{ token, password, name? }` | `201 { message, access_token, organizationId, roleId, roleName }` | `400`, `409` |
 
 Outside production, `register` and `forgot-password` (for an existing account)
 also return the raw token and link, plus `emailSent`/`emailError` — see §4.
@@ -934,7 +946,10 @@ Behaviour worth encoding in the UI:
   `DELETE /invitations/{invitationId}` revokes: the emailed link stops working
   (`409` on both accept routes) and the address can be invited again at once; an
   already-accepted invitation is `409`, because the membership it created is
-  removed with `DELETE …/members/{userId}`, not here.
+  removed with `DELETE …/members/{userId}`, not here. Accepting needs only a
+  password when the address has no account yet — the invited email comes from
+  `GET /invitations/accept`, and `name` is optional — and it answers
+  `access_token` plus the refresh cookie, so it is a login as much as a join.
 - A member holds exactly one role. `PATCH /members/{userId}` **replaces** it.
 - `PUT /roles/{roleId}/permissions` replaces the whole set — send the complete
   list, not a delta. Unknown permission strings are `400`.
@@ -1235,7 +1250,7 @@ tasks, and `0` on `/dashboard/overview` when the organization has no tasks.
 - [ ] `x-organization-id` preflight verified once in a real browser (§2)
 - [ ] Verification page reads `?token=` and calls `GET /auth/verify-email`; treats `Email already verified` as success
 - [ ] Reset page reads `?token=` from its **own** route and POSTs to `/auth/reset-password`; the emailed URL itself only validates the token (`GET /auth/reset-password`), it never resets anything
-- [ ] Invitation page owns `/invitations/accept?token=…`: `GET` first to show who invited whom, `POST` only on submit; `409` means the link was already used (§4)
+- [ ] Invitation page owns `/invitations/accept?token=…`: `GET` first to show the invited address and role, `POST { token, password }` on submit; the 201 carries `access_token` and sets the refresh cookie, so store it like a login (§4); `409` means the link was already used
 - [ ] Accepting on behalf of a brand-new account sends `token`, `name` and `password` together — a `400` on accept means the credentials were missing or the token is dead
 - [ ] Password inputs validated with `^(?=.*[A-Za-z])(?=.*\d).{8,128}$` before submit
 - [ ] Password change and email change both re-authenticate the user afterwards: both end the token in hand (§3.8)

@@ -54,6 +54,10 @@ import { SessionCookies } from './session-cookies.js';
     // session, and an address change has to reset verification. One
     // implementation of those is the whole point.
     AuthService,
+    // Same reason, for `InvitationService`: accepting an invitation signs the
+    // invitee in, and the cookies have to be written by the one class that
+    // knows their flags and paths.
+    SessionCookies,
   ],
 })
 export class AuthModule {}

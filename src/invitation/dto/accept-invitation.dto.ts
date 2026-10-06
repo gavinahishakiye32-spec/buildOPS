@@ -26,7 +26,7 @@ export class AcceptInvitationDto {
   @ApiPropertyOptional({
     example: 'Someone',
     description:
-      'Your name. Required only when the invitation has no account behind it yet: there is nothing to name otherwise.',
+      'Your display name, if you want to be known by something other than your address. Optional: the form only has to show the invited email and ask for a password.',
   })
   @IsOptional()
   @IsString()
@@ -37,7 +37,7 @@ export class AcceptInvitationDto {
     example: 'Someone123!',
     minLength: 8,
     description:
-      'Password for the account created with this invitation, with the same rules as registration. Required only for a new account.',
+      'The password for the account this invitation creates, with the same rules as registration. The only field a new account has to fill in. Not required when the address already has an account -- the invitation token is what authenticates that case.',
   })
   @IsOptional()
   @IsString()

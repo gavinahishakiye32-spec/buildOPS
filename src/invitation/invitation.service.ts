@@ -11,6 +11,8 @@ import { Repository } from 'typeorm';
 
 import { normalizeEmail } from '../common/email.js';
 import type { PermissionName } from '../common/permissions.js';
+import { AuthService } from '../auth/auth.service.js';
+import type { IssuedSession, SessionClient } from '../auth/session.service.js';
 import {
   dispatchEmail,
   emailLink,
@@ -45,6 +47,16 @@ const isUniqueViolation = (error: unknown): boolean => {
 };
 
 /**
+ * What `accept` hands back: the report the response documents, plus the
+ * refresh record the controller has to turn into an httpOnly cookie. The
+ * session never reaches the body -- only the access token does, exactly as
+ * `POST /auth/login` answers.
+ */
+export type AcceptInvitationResult = AcceptInvitationResponseDto & {
+  session: IssuedSession;
+};
+
+/**
  * Invitations: how somebody who is not a member yet becomes one.
  *
  * The flow exists because the two obvious shortcuts are both wrong. Adding a
@@ -70,6 +82,7 @@ export class InvitationService {
     private readonly roleService: RoleService,
     private readonly userService: UserService,
     private readonly mailService: MailService,
+    private readonly authService: AuthService,
     private readonly config: ConfigService,
   ) {}
 
@@ -210,18 +223,27 @@ export class InvitationService {
    * The token is what proves the caller controls the mailbox the invitation was
    * sent to, so an invitee who had no account gets one here and it is created
    * already verified -- no second email, no login refused for being unverified.
-   * An existing unverified account is verified for the same reason.
+   * An existing unverified account is verified for the same reason. The only
+   * field that account has to supply is the password: the address is already
+   * known to the invitation, and the name is optional.
    *
    * The role is assigned through `RoleService.addMember`, which means the plan
    * seat check, the "already a member" refusal and the tenant lock all run here
    * exactly as they do for `POST /members`. The invitation is marked accepted
    * only after that succeeds, so a refused acceptance leaves it pending and
    * retryable.
+   *
+   * Accepting also signs the invitee in. The click has just proven control of
+   * the mailbox, which is the same thing the password would have proven, so
+   * making them retype it on the next screen would only add a step between the
+   * email and the workspace they were invited into. They keep the account, and
+   * from then on they sign in with the address and the password they set here.
    */
   async accept(
     token: string,
     dto: AcceptInvitationDto,
-  ): Promise<AcceptInvitationResponseDto> {
+    client: SessionClient,
+  ): Promise<AcceptInvitationResult> {
     const invitation = await this.requirePending(token);
     const organization = await this.requireOrganization(
       invitation.organizationId,
@@ -239,8 +261,11 @@ export class InvitationService {
     invitation.acceptedAt = new Date();
     await this.invitationRepo.save(invitation);
 
+    const issued = await this.authService.establishSession(user, client);
+
     return {
       message: 'Invitation accepted',
+      access_token: issued.access_token,
       organizationId: invitation.organizationId,
       organizationName: organization.name,
       roleId: role.id,
@@ -248,6 +273,7 @@ export class InvitationService {
       permissions: (role.permissions ?? []).map(
         (permission) => permission.name as PermissionName,
       ),
+      session: issued.session,
     };
   }
 
@@ -266,9 +292,9 @@ export class InvitationService {
       return invitee;
     }
 
-    if (!dto.name || !dto.password) {
+    if (!dto.password) {
       throw new BadRequestException(
-        'Name and password are required: this invitation has no account behind it yet',
+        'Choose a password to create your account: this invitation has no account behind it yet',
       );
     }
 

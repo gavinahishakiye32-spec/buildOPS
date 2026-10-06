@@ -916,37 +916,40 @@ describe('BuildOps operational flow (e2e)', () => {
       );
       expect(Array.isArray(preview.body.permissions)).toBe(true);
 
-      // An address with no account behind it: the credentials are what create
-      // that account, so accepting without them changes nothing.
+      // An address with no account behind it: the password is what creates
+      // that account, so accepting without one changes nothing.
       await request(server)
         .post(api('/invitations/accept'))
         .send({ token: mailTokens.invitation })
         .expect(400);
 
+      // Nothing else is asked of the invitee: the invited email is already
+      // known to the invitation, and the name is optional. What comes back is
+      // a session -- the click that joined them also gets them in.
       const accepted = await request(server)
         .post(api('/invitations/accept'))
-        .send({
-          token: mailTokens.invitation,
-          name: 'Invitee',
-          password: 'password123',
-        })
+        .send({ token: mailTokens.invitation, password: 'password123' })
         .expect(201);
       expect(accepted.body).toEqual(
         expect.objectContaining({
           message: 'Invitation accepted',
+          access_token: expect.any(String),
           organizationId,
           roleName: 'Developer',
         }),
       );
 
+      const straightIn = await request(server)
+        .get(api('/clients'))
+        .set('Authorization', `Bearer ${accepted.body.access_token as string}`)
+        .set('x-organization-id', organizationId)
+        .expect(200);
+      expect(Array.isArray(straightIn.body.items)).toBe(true);
+
       // The same link clicked twice is a documented conflict, not a second role.
       await request(server)
         .post(api('/invitations/accept'))
-        .send({
-          token: mailTokens.invitation,
-          name: 'Invitee',
-          password: 'password123',
-        })
+        .send({ token: mailTokens.invitation, password: 'password123' })
         .expect(409);
 
       const members = await asOwner(
@@ -964,8 +967,8 @@ describe('BuildOps operational flow (e2e)', () => {
       );
       inviteeId = invitee.userId as string;
 
-      // Acceptance claimed a seat, and the new member can sign in with the
-      // password that was set at acceptance.
+      // Acceptance claimed a seat, and from then on the account signs in the
+      // ordinary way: the address they were invited on, the password they set.
       expect(await seatsInUse()).toBe(seatsBefore + 1);
 
       clearThrottle();

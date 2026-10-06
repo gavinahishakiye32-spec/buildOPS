@@ -123,6 +123,13 @@ export class AcceptInvitationResponseDto {
   @ApiProperty({ example: 'Invitation accepted' })
   message: string;
 
+  @ApiProperty({
+    description:
+      'JWT access token. Accepting signs the invitee in the same way logging in does, so the click that joins them also gets them in.',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…',
+  })
+  access_token: string;
+
   @ApiProperty({ example: '9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d' })
   organizationId: string;
 

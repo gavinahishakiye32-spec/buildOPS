@@ -300,6 +300,8 @@ Example: a Developer role may be allowed to create and update development tasks,
 
 **Adding a member who has no account yet:** when the invited address has no User row, there is nothing to attach a Role to. The administrator therefore invites the address instead: an `OrganizationInvitation` holds the address, the role template and the hash of a token sent by email, and the Role — and the plan seat it consumes — are created only when the invitation is accepted through the emailed link, which also creates the account. One pending invitation per address; a second is refused until the first is revoked or expires after seven days. Inviting an address whose membership exists but is deactivated is refused as well, with the answer naming activation rather than a second role.
 
+The invitee does not register in the ordinary sense: the landing page shows the address they were invited on (the preview returns it) and asks for a password, which is the only credential the new account needs — the name is optional, and the token has already proven control of the mailbox. Accepting therefore signs them in the same way `POST /auth/login` does, so the click that creates the membership also grants access, and every later sign-in uses that address and password.
+
 ## 7. Team Management
 
 Teams are created inside an Organization. Users are connected to Teams through TeamMember. A User must belong to the relevant Organization before becoming a Team member.
