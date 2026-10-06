@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { compare } from 'bcryptjs';
 import { createHash } from 'node:crypto';
@@ -46,6 +47,10 @@ describe('AuthService', () => {
     revokeAllForUser: any;
     isFamilyActive: any;
     listForUser: any;
+  };
+
+  let config: {
+    get: any;
   };
 
   const mockUser = {
@@ -107,6 +112,20 @@ describe('AuthService', () => {
       listForUser: jest.fn(async () => []),
     };
 
+    config = {
+      get: jest.fn((key: string, fallback?: unknown) => {
+        switch (key) {
+          case 'APP_BASE_URL':
+            return 'http://localhost:3000';
+          case 'NODE_ENV':
+            // Read live, so a test can flip NODE_ENV for the production gate.
+            return process.env.NODE_ENV ?? 'test';
+          default:
+            return fallback;
+        }
+      }),
+    };
+
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -125,6 +144,10 @@ describe('AuthService', () => {
         {
           provide: SessionService,
           useValue: sessionService,
+        },
+        {
+          provide: ConfigService,
+          useValue: config,
         },
       ],
     }).compile();
@@ -188,6 +211,76 @@ describe('AuthService', () => {
       expect(userService.create).not.toHaveBeenCalled();
       expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
+
+    it('returns the token, link and send outcome outside production', async () => {
+      userService.findByEmail.mockResolvedValue(null);
+      userService.create.mockResolvedValue(mockUser);
+
+      const result = await authService.register({
+        email: 'test@example.com',
+        password: 'password123',
+        name: 'Test User',
+      });
+
+      const sentToken = mailService.sendVerificationEmail.mock
+        .calls[0][1] as string;
+
+      expect(result).toMatchObject({
+        verificationToken: sentToken,
+        verificationLink: `http://localhost:3000/api/v1/auth/verify-email?token=${sentToken}`,
+        emailSent: true,
+      });
+      expect(result.emailError).toBeUndefined();
+    });
+
+    it('reports a failed send but still returns the token outside production', async () => {
+      userService.findByEmail.mockResolvedValue(null);
+      userService.create.mockResolvedValue(mockUser);
+      mailService.sendVerificationEmail.mockRejectedValueOnce(
+        new Error('SMTP connection failed'),
+      );
+
+      const result = await authService.register({
+        email: 'test@example.com',
+        password: 'password123',
+        name: 'Test User',
+      });
+
+      expect(result).toMatchObject({
+        emailSent: false,
+        emailError: 'SMTP connection failed',
+      });
+      expect(typeof result.verificationToken).toBe('string');
+    });
+
+    it('keeps the token out of the response in production', async () => {
+      const previous = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      try {
+        userService.findByEmail.mockResolvedValue(null);
+        userService.create.mockResolvedValue(mockUser);
+
+        const result = await authService.register({
+          email: 'test@example.com',
+          password: 'password123',
+          name: 'Test User',
+        });
+
+        expect(result.verificationToken).toBeUndefined();
+        expect(result.verificationLink).toBeUndefined();
+        expect(result.emailSent).toBeUndefined();
+
+        // The email is still sent -- fire-and-forget, unreported.
+        expect(mailService.sendVerificationEmail).toHaveBeenCalledTimes(1);
+      } finally {
+        if (previous === undefined) {
+          delete process.env.NODE_ENV;
+        } else {
+          process.env.NODE_ENV = previous;
+        }
+      }
+    });
   });
 
   describe('login', () => {
@@ -220,16 +313,17 @@ describe('AuthService', () => {
           '$2b$10$9..eefpF/TxhmA.ntLxcVO7.LaqDQe7LMA6QwxfqKFDWN4saVicPO',
       });
 
-      await expect(
-        authService.login(
+      const error = (await authService
+        .login(
           {
             email: 'test@example.com',
             password: 'password123',
           },
           { userAgent: 'jest', ip: '127.0.0.1' },
-        ),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+        )
+        .catch((caught: unknown) => caught)) as ForbiddenException;
 
+      expect(error).toBeInstanceOf(ForbiddenException);
       expect(jwtService.sign).not.toHaveBeenCalled();
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
@@ -246,6 +340,19 @@ describe('AuthService', () => {
       expect(storedToken).toBe(
         createHash('sha256').update(sentToken).digest('hex'),
       );
+
+      // Outside production the 403 carries the fresh token too, so the caller
+      // that just got bounced can complete verification without email.
+      const body = error.getResponse() as Record<string, unknown>;
+
+      expect(body.statusCode).toBe(403);
+      expect(body.error).toBe('Forbidden');
+      expect(body.message).toContain('Email not verified');
+      expect(body.verificationToken).toBe(sentToken);
+      expect(body.verificationLink).toBe(
+        `http://localhost:3000/api/v1/auth/verify-email?token=${sentToken}`,
+      );
+      expect(body.emailSent).toBe(true);
     });
 
     it('throws UnauthorizedException when user does not exist', async () => {
@@ -644,6 +751,15 @@ describe('AuthService', () => {
       expect(storedToken).toBe(
         createHash('sha256').update(sentToken).digest('hex'),
       );
+
+      // Outside production the response carries the raw token and link, and
+      // says whether the mail actually left.
+      expect(result).toMatchObject({
+        resetToken: sentToken,
+        resetLink: `http://localhost:3000/api/v1/auth/reset-password?token=${sentToken}`,
+        emailSent: true,
+      });
+      expect(result.emailError).toBeUndefined();
     });
 
     it('does not leak account existence when the email is unknown', async () => {
@@ -657,6 +773,8 @@ describe('AuthService', () => {
         'If an account with that email exists, a reset link was sent',
       );
 
+      expect(result).not.toHaveProperty('resetToken');
+      expect(result).not.toHaveProperty('resetLink');
       expect(userService.setResetToken).not.toHaveBeenCalled();
       expect(mailService.sendResetPasswordEmail).not.toHaveBeenCalled();
     });
@@ -713,6 +831,53 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(userService.updatePassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('validateResetToken', () => {
+    it('accepts a live token without consuming it', async () => {
+      userService.findByResetToken.mockResolvedValue({
+        ...mockUser,
+        resetTokenExpires: new Date(Date.now() + 60_000),
+      });
+
+      const result = await authService.validateResetToken('raw-reset-token');
+
+      expect(userService.findByResetToken).toHaveBeenCalledWith(
+        createHash('sha256').update('raw-reset-token').digest('hex'),
+      );
+      expect(result.message).toContain('Reset token is valid');
+
+      // Checking is not resetting: nothing about the account may change.
+      expect(userService.updatePassword).not.toHaveBeenCalled();
+      expect(userService.setResetToken).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the token is missing', async () => {
+      await expect(authService.validateResetToken('')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      expect(userService.findByResetToken).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException for an unknown token', async () => {
+      userService.findByResetToken.mockResolvedValue(null);
+
+      await expect(
+        authService.validateResetToken('bad-token'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws BadRequestException for an expired token', async () => {
+      userService.findByResetToken.mockResolvedValue({
+        ...mockUser,
+        resetTokenExpires: new Date(Date.now() - 1000),
+      });
+
+      await expect(
+        authService.validateResetToken('expired-token'),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 });

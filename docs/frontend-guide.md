@@ -243,6 +243,10 @@ POST /api/v1/auth/reset-password
 `201` → `{ "message": "Password reset successfully" }`. `400` on invalid/expired
 token (1 h TTL). The token is consumed by resetting the password.
 
+To check a token without consuming it — for instance when the user opens the
+emailed link — use `GET /api/v1/auth/reset-password?token=…`: `200` while the
+token is live, `400` once it is invalid or expired (§4).
+
 ### 3.4 Profile
 
 | Method  | Path            | Notes                                                                           |
@@ -411,13 +415,22 @@ Consequences for the frontend:
    backend to set `APP_BASE_URL` to your frontend origin and own a
    `/verify-email?token=…` route that calls the endpoint, or keep the current
    behaviour and link users to your app from the email template.
-2. **The reset link is a `GET` URL for a `POST`-only endpoint.** Following it
-   directly yields `404`. Own a `/reset-password?token=…` page, read the token
-   from the query string, and submit it as
-   `POST /auth/reset-password` with the new password. Do not treat the emailed
-   URL as an API call.
+2. **The reset link is a `GET` URL; resetting is a `POST`.** Opening the
+   emailed URL answers `200 { message }` while the token is still usable and
+   `400` once it is invalid or expired — it validates, it never resets
+   anything. Own a `/reset-password?token=…` page, read the token from the
+   query string, and submit it as `POST /auth/reset-password` with the new
+   password.
 3. Tokens are opaque 32-byte hex strings, valid once, and stored hashed. They
    arrive in the query string — strip them from client-side analytics and logs.
+4. **Outside production** the API returns the same links in JSON as well:
+   `POST /auth/register` answers with `verificationToken` + `verificationLink`,
+   `POST /auth/forgot-password` with `resetToken` + `resetLink` (only for an
+   existing account, so the unknown-email answer stays identical), and the
+   `403` of an unverified login carries the fresh `verificationToken` too. Each
+   of those responses also carries `emailSent` and, when the send failed,
+   `emailError`. Production responses never contain a token: there it exists
+   only in the email.
 
 ---
 
@@ -813,7 +826,11 @@ API serves but the Swagger document does not yet list.
 | `GET`  | `/auth/verify-email`    | `?token`                     | `200 { message }`       | `400`               |
 | `POST` | `/auth/forgot-password` | `{ email }`                  | `201 { message }`       | `400`               |
 | `POST` | `/auth/reset-password`  | `{ token, password }`        | `201 { message }`       | `400`               |
+| `GET`  | `/auth/reset-password`  | `?token`                     | `200 { message }`       | `400`               |
 | `GET`  | `/plans`                | —                            | `200 PlanResponseDto[]` | —                   |
+
+Outside production, `register` and `forgot-password` (for an existing account)
+also return the raw token and link, plus `emailSent`/`emailError` — see §4.
 
 ### 9.2 Authenticated, tenant-level (no organization needed)
 
@@ -1153,7 +1170,7 @@ tasks, and `0` on `/dashboard/overview` when the organization has no tasks.
 - [ ] `x-organization-id` attached from an organization store; re-prompted on the `404` that mentions the header
 - [ ] `x-organization-id` preflight verified once in a real browser (§2)
 - [ ] Verification page reads `?token=` and calls `GET /auth/verify-email`; treats `Email already verified` as success
-- [ ] Reset page reads `?token=` from its **own** route and POSTs to `/auth/reset-password`; never GETs the emailed URL
+- [ ] Reset page reads `?token=` from its **own** route and POSTs to `/auth/reset-password`; the emailed URL itself only validates the token (`GET /auth/reset-password`), it never resets anything
 - [ ] Password inputs validated with `^(?=.*[A-Za-z])(?=.*\d).{8,128}$` before submit
 - [ ] Password change and email change both re-authenticate the user afterwards: both end the token in hand (§3.8)
 - [ ] `403 Missing required permission` → hide/disable the control, do not retry

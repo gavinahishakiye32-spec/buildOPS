@@ -5,11 +5,13 @@ import {
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcryptjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { UserService } from '../user/user.service.js';
 import { MailService } from '../mail/mail.service.js';
+import { buildEmailLink } from '../mail/mail.links.js';
 import { User } from '../user/user.entity.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -26,6 +28,22 @@ import type { SessionClient } from './session.service.js';
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
+/** What one email attempt did, reported outside production only. */
+type EmailDelivery = Partial<{ emailSent: boolean; emailError: string }>;
+
+/**
+ * The fields a non-production response adds: the raw token, the matching link
+ * and the delivery report. Every one of them is absent in production.
+ */
+type EmailExtras = Partial<{
+  verificationToken: string;
+  verificationLink: string;
+  resetToken: string;
+  resetLink: string;
+  emailSent: boolean;
+  emailError: string;
+}>;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -33,6 +51,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly sessionService: SessionService,
+    private readonly config: ConfigService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -46,12 +65,13 @@ export class AuthService {
       dto.password,
       dto.name,
     );
-    await this.issueVerificationToken(user);
+    const issued = await this.issueVerificationToken(user);
 
     return {
       message:
         'Registration successful. Please verify your email before logging in.',
       user: user.toResponse(),
+      ...this.emailExtras('verification', issued.token, issued.delivery),
     };
   }
 
@@ -67,10 +87,14 @@ export class AuthService {
     }
 
     if (!user.isVerified) {
-      await this.issueVerificationToken(user);
-      throw new ForbiddenException(
-        'Email not verified. Check your inbox for a verification link before logging in.',
-      );
+      const issued = await this.issueVerificationToken(user);
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'Forbidden',
+        message:
+          'Email not verified. Check your inbox for a verification link before logging in.',
+        ...this.emailExtras('verification', issued.token, issued.delivery),
+      });
     }
 
     const session = await this.sessionService.issue(user.id, client);
@@ -302,12 +326,17 @@ export class AuthService {
     return { message: 'Email verified successfully' };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto) {
+  async forgotPassword(
+    dto: ForgotPasswordDto,
+  ): Promise<{ message: string } & EmailExtras> {
     const message =
       'If an account with that email exists, a reset link was sent';
 
     const user = await this.userService.findByEmail(dto.email);
     if (!user) {
+      // The same answer either way: a caller must not be able to tell an
+      // address that exists from one that does not, so this branch can never
+      // carry a token.
       return { message };
     }
 
@@ -317,11 +346,39 @@ export class AuthService {
       this.hashToken(token),
       new Date(Date.now() + RESET_TOKEN_TTL_MS),
     );
-    this.mailService
-      .sendResetPasswordEmail(user.email, token)
-      .catch(() => undefined);
+    const delivery = await this.dispatchEmail(() =>
+      this.mailService.sendResetPasswordEmail(user.email, token),
+    );
 
-    return { message };
+    return { message, ...this.emailExtras('reset', token, delivery) };
+  }
+
+  /**
+   * Checks a reset token without consuming it, so following the emailed link
+   * in a browser answers `200` while the token is still usable rather than
+   * `404`. The password change itself stays on `POST /auth/reset-password`.
+   */
+  async validateResetToken(token: string) {
+    if (!token) {
+      throw new BadRequestException(
+        'Reset token is required. Read it from the ?token= link sent by email.',
+      );
+    }
+
+    const user = await this.userService.findByResetToken(
+      this.hashToken(token),
+    );
+    if (
+      !user ||
+      (user.resetTokenExpires && user.resetTokenExpires.getTime() < Date.now())
+    ) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    return {
+      message:
+        'Reset token is valid. POST a new password with this token to /auth/reset-password to choose one.',
+    };
   }
 
   async resetPassword(dto: ResetPasswordDto) {
@@ -346,16 +403,83 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
-  private async issueVerificationToken(user: User): Promise<void> {
+  private async issueVerificationToken(
+    user: User,
+  ): Promise<{ token: string; delivery: EmailDelivery }> {
     const token = this.generateToken();
     await this.userService.setVerificationToken(
       user.id,
       this.hashToken(token),
       new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
     );
-    this.mailService
-      .sendVerificationEmail(user.email, token)
-      .catch(() => undefined);
+    const delivery = await this.dispatchEmail(() =>
+      this.mailService.sendVerificationEmail(user.email, token),
+    );
+
+    return { token, delivery };
+  }
+
+  /**
+   * True outside production: there the API answers with the raw token and link
+   * and reports the SMTP outcome, so a local flow can be driven without a
+   * working mail server. Production never includes them -- there the token
+   * exists only in the email, which is the whole point of hashing it at rest.
+   */
+  private get exposeEmailTokens(): boolean {
+    return this.config.get<string>('NODE_ENV') !== 'production';
+  }
+
+  /**
+   * Sends one email and reports what happened, outside production only.
+   *
+   * Outside production the send is awaited, so the response can say whether the
+   * mail actually left (`emailSent` / `emailError`) instead of claiming success
+   * while SMTP quietly refused it -- the failure mode that leaves a caller
+   * staring at a `201` and an empty inbox. In production the send stays
+   * fire-and-forget: registering must not wait on, or be failed by, the mail
+   * server, and MailService has already logged the error. Production therefore
+   * gets no delivery report at all.
+   */
+  private async dispatchEmail(
+    send: () => Promise<void>,
+  ): Promise<EmailDelivery> {
+    if (!this.exposeEmailTokens) {
+      void send().catch(() => undefined);
+      return {};
+    }
+
+    try {
+      await send();
+      return { emailSent: true };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { emailSent: false, emailError: message };
+    }
+  }
+
+  /**
+   * The token, the link and the delivery report, as they belong in a JSON
+   * response. An empty object in production, which is what keeps the token out
+   * of production bodies.
+   */
+  private emailExtras(
+    kind: 'verification' | 'reset',
+    token: string,
+    delivery: EmailDelivery,
+  ): EmailExtras {
+    if (!this.exposeEmailTokens) {
+      return {};
+    }
+
+    const link = buildEmailLink(
+      this.config.get<string>('APP_BASE_URL'),
+      kind === 'verification' ? 'verify-email' : 'reset-password',
+      token,
+    );
+
+    return kind === 'verification'
+      ? { verificationToken: token, verificationLink: link, ...delivery }
+      : { resetToken: token, resetLink: link, ...delivery };
   }
 
   /**

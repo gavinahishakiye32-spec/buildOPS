@@ -28,6 +28,7 @@ import {
   RegisterResponseDto,
   LoginResponseDto,
   MessageResponseDto,
+  ForgotPasswordResponseDto,
   SessionResponseDto,
   UserResponseDto,
 } from './dto/response.dto.js';
@@ -53,11 +54,12 @@ export class AuthController {
   @ApiOperation({
     summary: 'Register a new user',
     description:
-      'Creates a user account and triggers a verification email. No access token is issued until the email is verified.',
+      'Creates a user account and triggers a verification email. No access token is issued until the email is verified. Outside production the response also carries `verificationToken`/`verificationLink` and the `emailSent`/`emailError` outcome of the send, so a local flow can run without a mail server.',
   })
   @ApiResponse({
     status: 201,
-    description: 'User created, no token until verified',
+    description:
+      'User created, no token until verified; outside production also the verification token, link and send outcome',
     type: RegisterResponseDto,
   })
   @ApiErrors(400)
@@ -91,7 +93,7 @@ export class AuthController {
   @ApiResponse({
     status: 403,
     description:
-      'Email not verified. A fresh verification link is sent on every attempt.',
+      'Email not verified. A fresh verification link is sent on every attempt; outside production the error body also carries the new `verificationToken` and `verificationLink`.',
     type: ErrorResponseDto,
   })
   async login(
@@ -261,12 +263,13 @@ export class AuthController {
   @ApiOperation({
     summary: 'Request password reset',
     description:
-      'Sends a password reset link by email. Always responds with the same success message whether or not the account exists.',
+      'Sends a password reset link by email. Always responds with the same success message whether or not the account exists. Outside production the response for an existing account also carries `resetToken`/`resetLink` and the `emailSent`/`emailError` outcome of the send.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Reset link sent',
-    type: MessageResponseDto,
+    description:
+      'Reset link sent; outside production also the reset token, link and send outcome for an existing account',
+    type: ForgotPasswordResponseDto,
   })
   @ApiErrors(400)
   forgotPassword(@Body() dto: ForgotPasswordDto) {
@@ -292,6 +295,29 @@ export class AuthController {
   })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
+  }
+
+  @Get('reset-password')
+  @Throttle({ auth: { limit: 20, ttl: 900000 } })
+  @ApiOperation({
+    summary: 'Check a password-reset token',
+    description:
+      'Validates a reset token without consuming it, so opening the emailed link in a browser answers 200 while the token is still usable instead of 404. It never resets anything: changing the password still requires POST /auth/reset-password with the new password.',
+  })
+  @ApiQuery({
+    name: 'token',
+    required: true,
+    description:
+      'Reset token received by email. The frontend should read `?token=` and call this endpoint.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reset token is valid',
+    type: MessageResponseDto,
+  })
+  @ApiErrors(400)
+  checkResetToken(@Query('token') token: string) {
+    return this.authService.validateResetToken(token);
   }
 
   @BearerProfile()

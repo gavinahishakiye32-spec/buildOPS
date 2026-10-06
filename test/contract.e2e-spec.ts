@@ -629,6 +629,30 @@ describe('published contract vs runtime (e2e)', () => {
       expect(reset.status).toBe(201);
       expect(mail.reset).toEqual(expect.any(String));
 
+      // Outside production the body carries the raw token and link too, and
+      // reports whether the send actually happened.
+      expect(reset.body.resetToken).toBe(mail.reset);
+      expect(reset.body.resetLink).toContain(mail.reset);
+      expect(reset.body.emailSent).toBe(true);
+
+      // The emailed link answers 200 rather than 404, and checking it must not
+      // consume the token the POST below is about to use.
+      await probe(
+        'get',
+        '/auth/reset-password',
+        (req) => req.query({ token: mail.reset }),
+        '200',
+        'live reset token',
+      );
+
+      await probe(
+        'get',
+        '/auth/reset-password',
+        (req) => req,
+        '400',
+        'missing reset token',
+      );
+
       const success = await probe(
         'post',
         '/auth/reset-password',

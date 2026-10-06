@@ -15,6 +15,7 @@ describe('AuthController', () => {
     verifyEmail: jest.Mock;
     forgotPassword: jest.Mock;
     resetPassword: jest.Mock;
+    validateResetToken: jest.Mock;
     getProfile: jest.Mock;
     updateProfile: jest.Mock;
     refresh: jest.Mock;
@@ -63,6 +64,10 @@ describe('AuthController', () => {
 
       resetPassword: jest.fn(async () => ({
         message: 'Password reset successfully',
+      })),
+
+      validateResetToken: jest.fn(async () => ({
+        message: 'Reset token is valid.',
       })),
 
       getProfile: jest.fn(async () => ({
@@ -223,6 +228,16 @@ describe('AuthController', () => {
 
     expect(result).toEqual({
       message: 'Password reset successfully',
+    });
+  });
+
+  it('delegates checkResetToken to the auth service with the query token', async () => {
+    const result = await controller.checkResetToken('reset-token');
+
+    expect(authService.validateResetToken).toHaveBeenCalledWith('reset-token');
+
+    expect(result).toEqual({
+      message: 'Reset token is valid.',
     });
   });
 

@@ -3,7 +3,7 @@
   "paths": {
     "/auth/register": {
       "post": {
-        "description": "Creates a user account and triggers a verification email. No access token is issued until the email is verified.",
+        "description": "Creates a user account and triggers a verification email. No access token is issued until the email is verified. Outside production the response also carries `verificationToken`/`verificationLink` and the `emailSent`/`emailError` outcome of the send, so a local flow can run without a mail server.",
         "operationId": "AuthController_register",
         "parameters": [],
         "requestBody": {
@@ -18,7 +18,7 @@
         },
         "responses": {
           "201": {
-            "description": "User created, no token until verified",
+            "description": "User created, no token until verified; outside production also the verification token, link and send outcome",
             "content": {
               "application/json": {
                 "schema": {
@@ -111,7 +111,7 @@
             }
           },
           "403": {
-            "description": "Email not verified. A fresh verification link is sent on every attempt.",
+            "description": "Email not verified. A fresh verification link is sent on every attempt; outside production the error body also carries the new `verificationToken` and `verificationLink`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -403,7 +403,7 @@
     },
     "/auth/forgot-password": {
       "post": {
-        "description": "Sends a password reset link by email. Always responds with the same success message whether or not the account exists.",
+        "description": "Sends a password reset link by email. Always responds with the same success message whether or not the account exists. Outside production the response for an existing account also carries `resetToken`/`resetLink` and the `emailSent`/`emailError` outcome of the send.",
         "operationId": "AuthController_forgotPassword",
         "parameters": [],
         "requestBody": {
@@ -418,11 +418,11 @@
         },
         "responses": {
           "201": {
-            "description": "Reset link sent",
+            "description": "Reset link sent; outside production also the reset token, link and send outcome for an existing account",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MessageResponseDto"
+                  "$ref": "#/components/schemas/ForgotPasswordResponseDto"
                 }
               }
             }
@@ -502,6 +502,57 @@
           }
         },
         "summary": "Reset password",
+        "tags": [
+          "auth"
+        ]
+      },
+      "get": {
+        "description": "Validates a reset token without consuming it, so opening the emailed link in a browser answers 200 while the token is still usable instead of 404. It never resets anything: changing the password still requires POST /auth/reset-password with the new password.",
+        "operationId": "AuthController_checkResetToken",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "description": "Reset token received by email. The frontend should read `?token=` and call this endpoint.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reset token is valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Check a password-reset token",
         "tags": [
           "auth"
         ]
@@ -11388,6 +11439,26 @@
           },
           "user": {
             "$ref": "#/components/schemas/UserResponseDto"
+          },
+          "verificationToken": {
+            "type": "string",
+            "description": "Raw verification token. Present outside production only; the same value is hashed at rest and delivered by email.",
+            "example": "3f2a1b8c9d0e7f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a"
+          },
+          "verificationLink": {
+            "type": "string",
+            "description": "The full verification link, ready to open. Present outside production only.",
+            "example": "http://localhost:3000/api/v1/auth/verify-email?token=3f2a1b8c…"
+          },
+          "emailSent": {
+            "type": "boolean",
+            "description": "Whether the verification email was actually handed to the SMTP server. Present outside production only; production sends are fire-and-forget and logged instead.",
+            "example": true
+          },
+          "emailError": {
+            "type": "string",
+            "description": "Why the send failed, when `emailSent` is false. Present outside production only.",
+            "example": "Failed to send email: SMTP connection failed"
           }
         },
         "required": [
@@ -11485,6 +11556,38 @@
         },
         "required": [
           "email"
+        ]
+      },
+      "ForgotPasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "If an account with that email exists, a reset link was sent"
+          },
+          "resetToken": {
+            "type": "string",
+            "description": "Raw reset token. Present outside production only, for an existing account; never for an unknown email, which keeps the response indistinguishable.",
+            "example": "9b8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a9b8c"
+          },
+          "resetLink": {
+            "type": "string",
+            "description": "The full reset link, ready to open. Present outside production only.",
+            "example": "http://localhost:3000/api/v1/auth/reset-password?token=9b8c7d6e…"
+          },
+          "emailSent": {
+            "type": "boolean",
+            "description": "Whether the reset email was actually handed to the SMTP server. Present outside production only.",
+            "example": true
+          },
+          "emailError": {
+            "type": "string",
+            "description": "Why the send failed, when `emailSent` is false. Present outside production only.",
+            "example": "Failed to send email: SMTP connection failed"
+          }
+        },
+        "required": [
+          "message"
         ]
       },
       "ResetPasswordDto": {

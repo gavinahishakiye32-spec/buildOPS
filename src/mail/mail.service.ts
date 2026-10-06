@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 
-import { API_PREFIX } from '../bootstrap.js';
 import type { SendEmailInput } from './mail.constants.js';
+import { buildEmailLink } from './mail.links.js';
 
 @Injectable()
 export class MailService {
@@ -20,19 +20,27 @@ export class MailService {
   }
 
   private createTransport(): Transporter {
+    const rawPort = Number(this.config.get<string>('SMTP_PORT', '465'));
+    // An empty `SMTP_PORT=` in .env parses to NaN, which nodemailer rejects
+    // with a connection error on every send. Fall back to the SMTPS default.
+    const port = Number.isInteger(rawPort) && rawPort > 0 ? rawPort : 465;
+
+    const user = this.config.get<string>('SMTP_USER');
+    const pass = this.config.get<string>('SMTP_PASSWORD');
+
     return nodemailer.createTransport({
       host: this.config.get<string>('SMTP_HOST', 'smtp.gmail.com'),
-      port: Number(this.config.get<string>('SMTP_PORT', '465')),
+      port,
       secure: this.config.get<string>('SMTP_SECURE', 'true') === 'true',
-      auth: {
-        user: this.config.get<string>('SMTP_USER'),
-        pass: this.config.get<string>('SMTP_PASSWORD'),
-      },
+      // Sending `auth: { user: undefined, pass: undefined }` makes some
+      // servers answer `535` on an anonymous connection that would have been
+      // accepted; only offer credentials that exist.
+      ...(user && pass ? { auth: { user, pass } } : {}),
     });
   }
 
   async sendVerificationEmail(email: string, token: string): Promise<void> {
-    const link = `${this.baseUrl}/${API_PREFIX}/auth/verify-email?token=${token}`;
+    const link = buildEmailLink(this.baseUrl, 'verify-email', token);
 
     await this.send({
       to: email,
@@ -45,7 +53,7 @@ export class MailService {
   }
 
   async sendResetPasswordEmail(email: string, token: string): Promise<void> {
-    const link = `${this.baseUrl}/${API_PREFIX}/auth/reset-password?token=${token}`;
+    const link = buildEmailLink(this.baseUrl, 'reset-password', token);
 
     await this.send({
       to: email,
@@ -57,8 +65,8 @@ export class MailService {
     });
   }
 
-  private get baseUrl(): string {
-    return this.config.get<string>('APP_BASE_URL', 'http://localhost:3000');
+  private get baseUrl(): string | undefined {
+    return this.config.get<string>('APP_BASE_URL');
   }
 
   private async send({ to, subject, html }: SendEmailInput): Promise<void> {

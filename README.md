@@ -34,6 +34,8 @@ See `.env.example` for all variables. Key ones: `DB_HOST/PORT/USER/PASS/NAME`, `
 `APP_BASE_URL` (for email links), SMTP (leave blank locally — email send failures are logged, not thrown),
 `SOFT_DELETE_RETENTION_DAYS` (30) and `PURGE_INTERVAL_HOURS` (24).
 
+Outside `NODE_ENV=production`, verification and reset flows do not need SMTP at all: `POST /auth/register`, `POST /auth/forgot-password` and the `403` of an unverified login return the raw token and link in the JSON body, together with `emailSent`/`emailError` reporting what the mail server did. Production responses never contain a token — there it exists only in the email.
+
 `JWT_SECRET` has no safe default: the app **refuses to boot** when `NODE_ENV=production` and it is unset, rather than signing tokens with a value published in this repository. Outside production it falls back to a development default and logs a warning, which keeps `npm test` and a fresh clone working.
 
 ## Architecture

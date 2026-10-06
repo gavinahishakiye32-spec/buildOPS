@@ -49,6 +49,9 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['GET', '/auth/verify-email', ['200']],
   ['POST', '/auth/forgot-password', ['201']],
   ['POST', '/auth/reset-password', ['201']],
+  // The check is a separate, non-consuming GET: opening the emailed link must
+  // answer 200 or 400 rather than the 404 of a GET against a POST-only route.
+  ['GET', '/auth/reset-password', ['200']],
   // The session routes are split by what actually authenticates them:
   // refresh and logout are reached by the httpOnly cookie, so they publish no
   // bearer scheme; logout-all and the sessions list need an access token.
@@ -194,6 +197,7 @@ const PUBLIC_OPERATIONS = [
   'GET /auth/verify-email',
   'POST /auth/forgot-password',
   'POST /auth/reset-password',
+  'GET /auth/reset-password',
   'GET /plans',
 ];
 

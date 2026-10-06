@@ -261,6 +261,11 @@ const endpointDocumentation = [
     documentedStatus: ['201', '400', '429'],
   },
   {
+    path: '/auth/reset-password',
+    method: 'get',
+    documentedStatus: ['200', '400', '429'],
+  },
+  {
     path: '/auth/profile',
     method: 'get',
     documentedStatus: ['200', '401', '429'],
@@ -514,6 +519,7 @@ describe('Swagger documentation (e2e)', () => {
         'UpdateProfileDto',
         'UserResponseDto',
         'RegisterResponseDto',
+        'ForgotPasswordResponseDto',
         'LoginResponseDto',
         'MessageResponseDto',
       ]) {
@@ -571,7 +577,7 @@ describe('Swagger documentation (e2e)', () => {
   });
 
   describe('POST /auth/register', () => {
-    it('returns 201 with a message and the documented user shape, no token', async () => {
+    it('returns 201 with a message and the documented user shape, no access token', async () => {
       const res = await registerUser(
         'alice@example.com',
         'password123',
@@ -590,6 +596,13 @@ describe('Swagger documentation (e2e)', () => {
       expect(res.body.access_token).toBeUndefined();
 
       expect(res.body.user.passwordHash).toBeUndefined();
+
+      // Outside production the response also carries the raw verification
+      // token and link, plus the outcome of the send -- which is how a local
+      // flow is driven when no mail server is reachable.
+      expect(res.body.verificationToken).toEqual(expect.any(String));
+      expect(res.body.verificationLink).toContain(res.body.verificationToken);
+      expect(res.body.emailSent).toBe(true);
     });
 
     it('returns 409 when the email is already registered', async () => {
@@ -840,6 +853,44 @@ describe('Swagger documentation (e2e)', () => {
           password: 'newPassword123!',
         })
         .expect(400);
+    });
+  });
+
+  describe('GET /auth/reset-password', () => {
+    it('answers 400 without a token', async () => {
+      await request(server).get('/auth/reset-password').expect(400);
+    });
+
+    it('answers 400 for an unknown token', async () => {
+      await request(server)
+        .get('/auth/reset-password')
+        .query({ token: 'not-a-real-token' })
+        .expect(400);
+    });
+
+    it('answers 200 for a live token without consuming it', async () => {
+      await registerUser('gina@example.com');
+
+      await request(server)
+        .post('/auth/forgot-password')
+        .send({ email: 'gina@example.com' })
+        .expect(201);
+
+      const { reset } = mailTokens;
+
+      expect(reset).toBeDefined();
+
+      // Opening the emailed link is a check, not the reset itself...
+      await request(server)
+        .get('/auth/reset-password')
+        .query({ token: reset })
+        .expect(200);
+
+      // ...so the token still works afterwards.
+      await request(server)
+        .post('/auth/reset-password')
+        .send({ token: reset, password: 'newPassword123!' })
+        .expect(201);
     });
   });
 
