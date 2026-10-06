@@ -28,6 +28,7 @@ const TABLES = [
   'clients',
   'team_members',
   'teams',
+  'organization_invitations',
   'permissions',
   'roles',
   'organizations',

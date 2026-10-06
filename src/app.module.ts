@@ -17,6 +17,7 @@ import { BillingModule } from './billing/billing.module.js';
 
 import { OrganizationModule } from './organization/organization.module.js';
 import { RoleModule } from './role/role.module.js';
+import { InvitationModule } from './invitation/invitation.module.js';
 import { TeamModule } from './team/team.module.js';
 import { ClientModule } from './client/client.module.js';
 import { ProjectModule } from './project/project.module.js';
@@ -77,6 +78,7 @@ import { SettingsModule } from './settings/settings.module.js';
     SubscriptionModule,
     OrganizationModule,
     RoleModule,
+    InvitationModule,
     TeamModule,
     ClientModule,
     ProjectModule,

@@ -16,6 +16,10 @@ const TAGS: [name: string, description: string][] = [
   ],
   ['organizations', 'Organization CRUD within the subscription'],
   ['roles', 'Role definitions and membership assignments'],
+  [
+    'invitations',
+    'Invitations by email: sending, listing, revoking and accepting one',
+  ],
   ['teams', 'Teams within an organization'],
   ['clients', 'Clients within an organization'],
   ['projects', 'Projects within an organization'],

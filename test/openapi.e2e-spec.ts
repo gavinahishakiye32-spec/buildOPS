@@ -95,6 +95,31 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['POST', '/organizations/{organizationId}/members', ['201']],
   ['PATCH', '/organizations/{organizationId}/members/{userId}', ['200']],
   ['DELETE', '/organizations/{organizationId}/members/{userId}', ['200']],
+  // A membership that is suspended rather than removed. Both directions are
+  // explicit operations instead of a status patch, because the difference
+  // between "gone" and "not right now" is not something to send as a field.
+  [
+    'POST',
+    '/organizations/{organizationId}/members/{userId}/deactivate',
+    ['200'],
+  ],
+  [
+    'POST',
+    '/organizations/{organizationId}/members/{userId}/activate',
+    ['200'],
+  ],
+  // Invitations, split by who can reach them: sending, listing and revoking sit
+  // with the organization, accepting is public because the invitee has no
+  // membership yet -- having one is what the invitation grants.
+  ['POST', '/organizations/{organizationId}/invitations', ['201']],
+  ['GET', '/organizations/{organizationId}/invitations', ['200']],
+  [
+    'DELETE',
+    '/organizations/{organizationId}/invitations/{invitationId}',
+    ['200'],
+  ],
+  ['GET', '/invitations/accept', ['200']],
+  ['POST', '/invitations/accept', ['201']],
   // Teams and their membership.
   ['POST', '/teams', ['201']],
   ['GET', '/teams', ['200']],
@@ -198,6 +223,8 @@ const PUBLIC_OPERATIONS = [
   'POST /auth/forgot-password',
   'POST /auth/reset-password',
   'GET /auth/reset-password',
+  'GET /invitations/accept',
+  'POST /invitations/accept',
   'GET /plans',
 ];
 

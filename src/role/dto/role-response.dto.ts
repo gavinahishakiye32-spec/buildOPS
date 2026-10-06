@@ -65,6 +65,14 @@ export class MemberResponseDto {
 
   @ApiProperty({ type: [String], example: ['task.create', 'dashboard.view'] })
   permissions: PermissionName[];
+
+  @ApiProperty({
+    enum: ['active', 'deactivated'],
+    example: 'active',
+    description:
+      'Membership status. A deactivated member keeps their role and their plan seat but resolves no permissions, so every organization-scoped call they make is refused until they are activated again.',
+  })
+  status: string;
 }
 
 export class RoleTemplateDto {

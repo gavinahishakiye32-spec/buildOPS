@@ -61,7 +61,7 @@ describe('published contract vs runtime (e2e)', () => {
   let dataSource: DataSource;
   let document: OpenApiDocument;
 
-  const mail: { verify?: string; reset?: string } = {};
+  const mail: { verify?: string; reset?: string; invitation?: string } = {};
 
   /** Every status the server actually returned, keyed `METHOD path:status`. */
   const observed = new Set<string>();
@@ -343,6 +343,9 @@ describe('published contract vs runtime (e2e)', () => {
         },
         sendResetPasswordEmail: async (_email: string, token: string) => {
           mail.reset = token;
+        },
+        sendInvitationEmail: async (_email: string, token: string) => {
+          mail.invitation = token;
         },
       })
       .compile();
@@ -2052,6 +2055,440 @@ describe('published contract vs runtime (e2e)', () => {
         (req) => asOwner(req),
         '404',
         'unknown member',
+      );
+    });
+
+    it('POST /organizations/{organizationId}/members/{userId}/deactivate returns 200, 400, 401, 403 and 404', async () => {
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/00000000-0000-4000-8000-000000000000/deactivate`,
+        (req) => asOwner(req),
+        '404',
+        'unknown member',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/deactivate`,
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/deactivate`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      // Self-deactivation is refused while the actor still holds the permission
+      // to be refused on: an administrator who suspends themselves locks the
+      // organization out of admins and needs a second one to notice.
+      clearThrottle();
+      const profile = await request(server)
+        .get(api('/auth/profile'))
+        .set('Authorization', `Bearer ${ownerToken}`);
+      expect(profile.status).toBe(200);
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/${profile.body.id}/deactivate`,
+        (req) => asOwner(req),
+        '400',
+        'deactivating yourself',
+      );
+
+      const suspended = await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/deactivate`,
+        (req) => asOwner(req),
+        '200',
+        'suspend a member',
+      );
+      expect(suspended.body).toMatchObject({
+        userId: memberUserId,
+        status: 'deactivated',
+      });
+
+      // Idempotent: the second click is the same answer, not a conflict.
+      const again = await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/deactivate`,
+        (req) => asOwner(req),
+        '200',
+        'already suspended',
+      );
+      expect(again.body.status).toBe('deactivated');
+    });
+
+    it('POST /organizations/{organizationId}/members/{userId}/activate returns 200, 401, 403 and 404', async () => {
+      // The test above leaves the member suspended; suspending again is a
+      // 200 either way, so this suite is not relying on that ordering.
+      clearThrottle();
+      const already = await request(server)
+        .post(
+          api(
+            `/organizations/${organizationId}/members/${memberUserId}/deactivate`,
+          ),
+        )
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('x-organization-id', organizationId);
+      expect(already.status).toBe(200);
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/00000000-0000-4000-8000-000000000000/activate`,
+        (req) => asOwner(req),
+        '404',
+        'unknown member',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/activate`,
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/activate`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      const restored = await probe(
+        'post',
+        `/organizations/${organizationId}/members/${memberUserId}/activate`,
+        (req) => asOwner(req),
+        '200',
+        'restore a member',
+      );
+      expect(restored.body).toMatchObject({
+        userId: memberUserId,
+        status: 'active',
+      });
+    });
+  });
+
+  describe('invitations', () => {
+    // One invitation created by the first test and read, listed and revoked by
+    // the ones after it; the live token is readable from the create response
+    // because this suite does not run in production.
+    let pendingInvitationId = '';
+    let pendingInvitationEmail = '';
+
+    /** Sends an invitation and accepts it, for the "already used" answers. */
+    const acceptFreshInvitation = async (
+      label: string,
+    ): Promise<{ id: string; token: string }> => {
+      const email = `${label}-${Date.now()}@example.com`;
+
+      clearThrottle();
+      const created = await request(server)
+        .post(api(`/organizations/${organizationId}/invitations`))
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('x-organization-id', organizationId)
+        .send({ email, templateKey: 'developer' });
+      expect(created.status).toBe(201);
+
+      clearThrottle();
+      const accepted = await request(server)
+        .post(api('/invitations/accept'))
+        .send({
+          token: created.body.invitationToken,
+          name: 'Invitee',
+          password: 'Someone123!',
+        });
+      expect(accepted.status).toBe(201);
+
+      return {
+        id: created.body.id as string,
+        token: created.body.invitationToken as string,
+      };
+    };
+
+    it('POST /organizations/{organizationId}/invitations returns 201, 400, 401, 403 and 409', async () => {
+      await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) => req.send({ email: 'nobody@example.com' }),
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) =>
+          asOutsider(req).send({ email: `outsider-${Date.now()}@example.com` }),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) => asOwner(req).send({ email: 'not-an-email' }),
+        '400',
+        'malformed email',
+      );
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) =>
+          asOwner(req).send({
+            email: `template-${Date.now()}@example.com`,
+            templateKey: 'nobody',
+          }),
+        '400',
+        'unknown role template',
+      );
+
+      pendingInvitationEmail = `invite-${Date.now()}@example.com`;
+      const created = await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) =>
+          asOwner(req).send({
+            email: pendingInvitationEmail,
+            templateKey: 'developer',
+          }),
+        '201',
+        'new invitation',
+      );
+      expect(created.body).toMatchObject({
+        id: expect.any(String),
+        email: pendingInvitationEmail,
+        status: 'pending',
+        roleName: expect.any(String),
+        expiresAt: expect.any(String),
+      });
+      // Outside production the raw token travels with the response, which is
+      // what lets the tests below follow the link without a mail server.
+      expect(created.body.invitationToken).toEqual(expect.any(String));
+      expect(created.body.emailSent).toBe(true);
+      pendingInvitationId = created.body.id as string;
+
+      await probe(
+        'post',
+        `/organizations/${organizationId}/invitations`,
+        (req) => asOwner(req).send({ email: pendingInvitationEmail }),
+        '409',
+        'invitation already pending',
+      );
+    });
+
+    it('GET /organizations/{organizationId}/invitations returns 200, 401 and 403', async () => {
+      const listed = await probe(
+        'get',
+        `/organizations/${organizationId}/invitations`,
+        (req) => asOwner(req),
+        '200',
+      );
+      expect(Array.isArray(listed.body)).toBe(true);
+      expect(listed.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: pendingInvitationId,
+            email: pendingInvitationEmail,
+            status: 'pending',
+          }),
+        ]),
+      );
+
+      await probe(
+        'get',
+        `/organizations/${organizationId}/invitations`,
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'get',
+        `/organizations/${organizationId}/invitations`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+    });
+
+    it('DELETE /organizations/{organizationId}/invitations/{invitationId} returns 200, 401, 403, 404 and 409', async () => {
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/invitations/00000000-0000-4000-8000-000000000000`,
+        (req) => asOwner(req),
+        '404',
+        'unknown invitation',
+      );
+
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/invitations/${pendingInvitationId}`,
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/invitations/${pendingInvitationId}`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      const revoked = await probe(
+        'delete',
+        `/organizations/${organizationId}/invitations/${pendingInvitationId}`,
+        (req) => asOwner(req),
+        '200',
+        'revoke a pending invitation',
+      );
+      expect(revoked.body).toMatchObject({
+        id: pendingInvitationId,
+        status: 'revoked',
+      });
+
+      // An accepted invitation is not this row's to undo: the membership it
+      // created is removed with DELETE /members/:userId.
+      const accepted = await acceptFreshInvitation('revoke');
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/invitations/${accepted.id}`,
+        (req) => asOwner(req),
+        '409',
+        'already accepted',
+      );
+    });
+
+    it('GET /invitations/accept returns 200, 400 and 409', async () => {
+      await probe('get', '/invitations/accept', (req) => req, '400', 'no token');
+
+      await probe(
+        'get',
+        '/invitations/accept',
+        (req) => req.query({ token: 'garbage' }),
+        '400',
+        'unknown token',
+      );
+
+      clearThrottle();
+      const created = await request(server)
+        .post(api(`/organizations/${organizationId}/invitations`))
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('x-organization-id', organizationId)
+        .send({ email: `preview-${Date.now()}@example.com` });
+      expect(created.status).toBe(201);
+
+      const preview = await probe(
+        'get',
+        '/invitations/accept',
+        (req) => req.query({ token: created.body.invitationToken }),
+        '200',
+        'live invitation',
+      );
+      expect(preview.body).toMatchObject({
+        email: expect.any(String),
+        organizationName: expect.any(String),
+        roleName: expect.any(String),
+        status: 'pending',
+        accountExists: false,
+      });
+      expect(Array.isArray(preview.body.permissions)).toBe(true);
+
+      const accepted = await acceptFreshInvitation('preview');
+      await probe(
+        'get',
+        '/invitations/accept',
+        (req) => req.query({ token: accepted.token }),
+        '409',
+        'already accepted',
+      );
+    });
+
+    it('POST /invitations/accept returns 201, 400 and 409', async () => {
+      await probe(
+        'post',
+        '/invitations/accept',
+        (req) => req.send({}),
+        '400',
+        'missing token',
+      );
+
+      await probe(
+        'post',
+        '/invitations/accept',
+        (req) => req.send({ token: 'garbage' }),
+        '400',
+        'unknown token',
+      );
+
+      clearThrottle();
+      const created = await request(server)
+        .post(api(`/organizations/${organizationId}/invitations`))
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('x-organization-id', organizationId)
+        .send({ email: `newhire-${Date.now()}@example.com` });
+      expect(created.status).toBe(201);
+      const token = created.body.invitationToken as string;
+
+      // An address with no account behind it: the credentials are what create
+      // that account, so accepting without them is a 400, not a half-made member.
+      await probe(
+        'post',
+        '/invitations/accept',
+        (req) => req.send({ token }),
+        '400',
+        'new account without credentials',
+      );
+
+      const accepted = await probe(
+        'post',
+        '/invitations/accept',
+        (req) =>
+          req.send({ token, name: 'New Hire', password: 'Someone123!' }),
+        '201',
+        'new account created and invited',
+      );
+      expect(accepted.body).toMatchObject({
+        message: 'Invitation accepted',
+        organizationId,
+        roleId: expect.any(String),
+        roleName: expect.any(String),
+      });
+
+      await probe(
+        'post',
+        '/invitations/accept',
+        (req) =>
+          req.send({ token, name: 'New Hire', password: 'Someone123!' }),
+        '409',
+        'replayed token',
+      );
+
+      // The membership the acceptance created is on the member list, with the
+      // status that starts out active.
+      clearThrottle();
+      const members = await request(server)
+        .get(api(`/organizations/${organizationId}/members`))
+        .set('Authorization', `Bearer ${ownerToken}`)
+        .set('x-organization-id', organizationId);
+      expect(members.status).toBe(200);
+      expect(members.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            email: expect.any(String),
+            roleName: 'Developer',
+            status: 'active',
+          }),
+        ]),
       );
     });
   });

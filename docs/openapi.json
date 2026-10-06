@@ -1836,6 +1836,216 @@
         ]
       }
     },
+    "/organizations/{organizationId}/members/{userId}/deactivate": {
+      "post": {
+        "description": "Suspends a member instead of removing them: their role, permissions and plan seat are kept, but the membership stops resolving, so every organization-scoped call they make answers 403 until they are activated again. Idempotent, and refused for your own membership -- an administrator who deactivates themselves has to be noticed by somebody else to come back.",
+        "operationId": "RoleController_deactivateMember",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The member, now deactivated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Deactivate a member",
+        "tags": [
+          "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.remove"
+        ]
+      }
+    },
+    "/organizations/{organizationId}/members/{userId}/activate": {
+      "post": {
+        "description": "Restores a deactivated member: the membership resolves again and their role permissions apply from the next request on. Idempotent for a member who is already active.",
+        "operationId": "RoleController_activateMember",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The member, now active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activate a member",
+        "tags": [
+          "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.update"
+        ]
+      }
+    },
     "/organizations/{organizationId}/roles/{roleId}": {
       "get": {
         "description": "One role of the organization with its attached permissions.",
@@ -3007,6 +3217,435 @@
         },
         "x-permissions": [
           "organization.delete"
+        ]
+      }
+    },
+    "/organizations/{organizationId}/invitations": {
+      "post": {
+        "description": "Sends an invitation link to an address and holds it as a pending row until it is accepted, revoked or expires (7 days). The role itself is created on acceptance, so no plan seat is claimed for somebody who never arrives. Answer 409 when that address already has a pending invitation or is already a member. Outside production the response also carries `invitationToken`/`invitationLink` and the `emailSent`/`emailError` outcome of the send.",
+        "operationId": "InvitationController_createInvitation",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation created and emailed; outside production also the token, link and send outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Invite a member by email",
+        "tags": [
+          "invitations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.invite"
+        ]
+      },
+      "get": {
+        "description": "Invitations of the organization, oldest first, with the ones that were accepted or revoked still listed so the history of who was invited survives. `status` is reported as `expired` for a pending row whose window has closed.",
+        "operationId": "InvitationController_listInvitations",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitations of the organization, including finished ones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InvitationResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List invitations",
+        "tags": [
+          "invitations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.view"
+        ]
+      }
+    },
+    "/organizations/{organizationId}/invitations/{invitationId}": {
+      "delete": {
+        "description": "Withdraws a pending invitation: the link stops working and the address can be invited again. Idempotent for one already revoked, and 409 for one that was accepted -- the membership it created is removed with DELETE /organizations/:organizationId/members/:userId, not here.",
+        "operationId": "InvitationController_revokeInvitation",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation revoked, or already revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Revoke an invitation",
+        "tags": [
+          "invitations"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "member.invite"
+        ]
+      }
+    },
+    "/invitations/accept": {
+      "get": {
+        "description": "Reads the invitation behind an emailed `?token=` without consuming it, so opening the link in a browser answers 200 and can show who invited whom, under which role, with which permissions. 400 for a missing, unknown or expired token, 409 for one that was already accepted or has been revoked.",
+        "operationId": "InvitationAcceptController_preview",
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "description": "Invitation token received by email. The frontend should read `?token=` and call this endpoint.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The invitation, with what accepting it would grant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreviewResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Preview an invitation",
+        "tags": [
+          "invitations"
+        ]
+      },
+      "post": {
+        "description": "Creates the membership the invitation promises. When no account exists for the address, `name` and `password` are required and the account is created already verified -- the token is the proof that the mailbox belongs to the caller. When an account does exist it is signed in as usual afterwards; an unverified one is verified here for the same reason. 400 for a missing, unknown or expired token or for a new account without a name and password, 409 for one already accepted, revoked, or already a member.",
+        "operationId": "InvitationAcceptController_accept",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation accepted and membership created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptInvitationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflicting state: the resource already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Accept an invitation",
+        "tags": [
+          "invitations"
         ]
       }
     },
@@ -11258,6 +11897,10 @@
       "description": "Role definitions and membership assignments"
     },
     {
+      "name": "invitations",
+      "description": "Invitations by email: sending, listing, revoking and accepting one"
+    },
+    {
       "name": "teams",
       "description": "Teams within an organization"
     },
@@ -12113,6 +12756,15 @@
             "items": {
               "type": "string"
             }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "deactivated"
+            ],
+            "example": "active",
+            "description": "Membership status. A deactivated member keeps their role and their plan seat but resolves no permissions, so every organization-scoped call they make is refused until they are activated again."
           }
         },
         "required": [
@@ -12120,7 +12772,8 @@
           "email",
           "roleId",
           "roleName",
-          "permissions"
+          "permissions",
+          "status"
         ]
       },
       "AddMemberDto": {
@@ -12493,6 +13146,310 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "CreateInvitationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "dev@example.com",
+            "description": "Address the invitation is sent to. Compared in normalized form, so `Dev@Example.com` and `dev@example.com` are the same invitation."
+          },
+          "templateKey": {
+            "type": "string",
+            "example": "developer",
+            "enum": [
+              "owner",
+              "project_manager",
+              "developer",
+              "tester",
+              "viewer"
+            ],
+            "description": "Default role template the invitee receives when they accept. Defaults to \"viewer\", matching POST /organizations/:organizationId/members."
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "CreateInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3f1d0a2c-6b1e-4a86-9f7a-1c2b3d4e5f60"
+          },
+          "organizationId": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "email": {
+            "type": "string",
+            "example": "dev@example.com"
+          },
+          "templateKey": {
+            "type": "string",
+            "example": "developer"
+          },
+          "roleName": {
+            "type": "string",
+            "example": "Developer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ],
+            "example": "pending",
+            "description": "Lifecycle of the invitation. `expired` is never stored: a pending row whose `expiresAt` has passed reports `expired` on read, so nothing has to sweep the table."
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-10-13T09:00:00.000Z",
+            "description": "When the token stops being acceptable. Seven days after issue."
+          },
+          "invitedBy": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "description": "The member who sent the invitation."
+          },
+          "acceptedAt": {
+            "type": "object",
+            "example": "2026-10-06T09:00:00.000Z",
+            "description": "When the invitation was accepted."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-10-06T09:00:00.000Z"
+          },
+          "invitationToken": {
+            "type": "string",
+            "description": "The raw invitation token. Absent in production, where the token exists only in the email it was hashed from."
+          },
+          "invitationLink": {
+            "type": "string",
+            "description": "The link that was emailed, ready to open. Absent in production."
+          },
+          "emailSent": {
+            "type": "boolean",
+            "description": "Whether the send completed while the request waited. Outside production only."
+          },
+          "emailError": {
+            "type": "string",
+            "description": "Why the send failed, when it did. Outside production only."
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "email",
+          "templateKey",
+          "roleName",
+          "status",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "InvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3f1d0a2c-6b1e-4a86-9f7a-1c2b3d4e5f60"
+          },
+          "organizationId": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "email": {
+            "type": "string",
+            "example": "dev@example.com"
+          },
+          "templateKey": {
+            "type": "string",
+            "example": "developer"
+          },
+          "roleName": {
+            "type": "string",
+            "example": "Developer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ],
+            "example": "pending",
+            "description": "Lifecycle of the invitation. `expired` is never stored: a pending row whose `expiresAt` has passed reports `expired` on read, so nothing has to sweep the table."
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-10-13T09:00:00.000Z",
+            "description": "When the token stops being acceptable. Seven days after issue."
+          },
+          "invitedBy": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "description": "The member who sent the invitation."
+          },
+          "acceptedAt": {
+            "type": "object",
+            "example": "2026-10-06T09:00:00.000Z",
+            "description": "When the invitation was accepted."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-10-06T09:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "organizationId",
+          "email",
+          "templateKey",
+          "roleName",
+          "status",
+          "expiresAt",
+          "createdAt"
+        ]
+      },
+      "InvitationPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "dev@example.com"
+          },
+          "organizationId": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "organizationName": {
+            "type": "string",
+            "example": "Globex"
+          },
+          "roleName": {
+            "type": "string",
+            "example": "Developer"
+          },
+          "permissions": {
+            "example": [
+              "task.create",
+              "dashboard.view"
+            ],
+            "description": "The permissions the role grants once the invitation is accepted.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ],
+            "example": "pending"
+          },
+          "expiresAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-10-13T09:00:00.000Z"
+          },
+          "accountExists": {
+            "type": "boolean",
+            "example": false,
+            "description": "Whether an account already exists for this address. False is the answer that makes the next step ask for a name and a password."
+          }
+        },
+        "required": [
+          "email",
+          "organizationId",
+          "organizationName",
+          "roleName",
+          "permissions",
+          "status",
+          "expiresAt",
+          "accountExists"
+        ]
+      },
+      "AcceptInvitationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Invitation token received by email. The frontend should read `?token=` from the link and send it back here.",
+            "example": "e04aab9c26ee8d3d4d2e6f8d12f10c9affc4b6de3b8f861e2a3c5d9e7f6a4b1c"
+          },
+          "name": {
+            "type": "string",
+            "example": "Someone",
+            "description": "Your name. Required only when the invitation has no account behind it yet: there is nothing to name otherwise."
+          },
+          "password": {
+            "type": "string",
+            "example": "Someone123!",
+            "minLength": 8,
+            "description": "Password for the account created with this invitation, with the same rules as registration. Required only for a new account."
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "AcceptInvitationResponseDto": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "example": "Invitation accepted"
+          },
+          "organizationId": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "organizationName": {
+            "type": "string",
+            "example": "Globex"
+          },
+          "roleId": {
+            "type": "string",
+            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33"
+          },
+          "roleName": {
+            "type": "string",
+            "example": "Developer"
+          },
+          "permissions": {
+            "example": [
+              "task.create",
+              "dashboard.view"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "message",
+          "organizationId",
+          "organizationName",
+          "roleId",
+          "roleName",
+          "permissions"
         ]
       },
       "CreateTeamDto": {

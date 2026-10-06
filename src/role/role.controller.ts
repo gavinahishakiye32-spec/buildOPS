@@ -127,19 +127,10 @@ export class RoleController {
     @Body() dto: AddMemberDto,
   ): Promise<MemberResponseDto> {
     const role = await this.roleService.addMember(auth.organizationId, dto);
-    const membership = await this.roleService.resolve(
+    return this.roleService.member(
       auth.organizationId,
       role.userId as string,
     );
-
-    return {
-      userId: role.userId as string,
-      email: role.user?.email ?? '',
-      name: role.user?.name ?? null,
-      roleId: role.id,
-      roleName: role.name,
-      permissions: membership?.permissions ?? [],
-    };
   }
 
   @Patch('members/:userId')
@@ -161,24 +152,12 @@ export class RoleController {
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() dto: UpdateMemberDto,
   ): Promise<MemberResponseDto> {
-    const role = await this.roleService.updateMemberRole(
+    await this.roleService.updateMemberRole(
       auth.organizationId,
       userId,
       dto.roleId as string,
     );
-    const membership = await this.roleService.resolve(
-      auth.organizationId,
-      userId,
-    );
-
-    return {
-      userId,
-      email: role.user?.email ?? '',
-      name: role.user?.name ?? null,
-      roleId: role.id,
-      roleName: role.name,
-      permissions: membership?.permissions ?? [],
-    };
+    return this.roleService.member(auth.organizationId, userId);
   }
 
   @Delete('members/:userId')
@@ -201,6 +180,65 @@ export class RoleController {
   ): Promise<RoleMessageResponseDto> {
     await this.roleService.removeMember(auth.organizationId, userId);
     return { message: 'Member removed from the organization' };
+  }
+
+  @Post('members/:userId/deactivate')
+  @HttpCode(200)
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.MEMBER_REMOVE)
+  @ApiOperation({
+    summary: 'Deactivate a member',
+    description:
+      'Suspends a member instead of removing them: their role, permissions and plan seat are kept, but the membership stops resolving, so every ' +
+      'organization-scoped call they make answers 403 until they are activated ' +
+      'again. Idempotent, and refused for your own membership -- an administrator ' +
+      'who deactivates themselves has to be noticed by somebody else to come back.',
+  })
+  @ApiResponse({
+    description: 'The member, now deactivated',
+    status: 200,
+    type: MemberResponseDto,
+  })
+  @ApiErrors(400, 403, 404)
+  async deactivateMember(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<MemberResponseDto> {
+    return this.roleService.setMemberStatus(
+      auth.organizationId,
+      userId,
+      'deactivated',
+      auth.userId,
+    );
+  }
+
+  @Post('members/:userId/activate')
+  @HttpCode(200)
+  @OrganizationHeader()
+  @RequirePermissions(PERMISSIONS.MEMBER_UPDATE)
+  @ApiOperation({
+    summary: 'Activate a member',
+    description:
+      'Restores a deactivated member: the membership resolves again and their role permissions apply from the next request on. Idempotent for a member who is already active.',
+  })
+  @ApiResponse({
+    description: 'The member, now active',
+    status: 200,
+    type: MemberResponseDto,
+  })
+  // No 400: unlike deactivation, activation has no rule of its own to refuse on,
+  // and the parameter pipe is not a promise the document makes.
+  @ApiErrors(403, 404)
+  async activateMember(
+    @OrgAuth() auth: OrganizationAuthContext,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<MemberResponseDto> {
+    return this.roleService.setMemberStatus(
+      auth.organizationId,
+      userId,
+      'active',
+      auth.userId,
+    );
   }
 
   @Post('roles')

@@ -35,6 +35,39 @@ import {
  * Role and permission management (spec §6) plus organization membership
  * resolution used by `PermissionsGuard` (spec §5).
  */
+
+/** One organization member as the member endpoints report them. */
+export interface MemberSummary {
+  userId: string;
+  email: string;
+  name: string | null;
+  roleId: string;
+  roleName: string;
+  permissions: PermissionName[];
+  status: string;
+}
+
+/** A role row that is assigned to somebody, with that somebody loaded. */
+const hasMember = (role: Role): boolean =>
+  role.userId !== null && role.user !== null;
+
+/**
+ * The member view of a role row. Callers pass an assigned row; `userId` is
+ * cast rather than re-checked because every caller has already established it
+ * (`hasMember`, or a `null` guard that throws).
+ */
+const describeMember = (role: Role): MemberSummary => ({
+  userId: role.userId as string,
+  email: role.user?.email ?? '',
+  name: role.user?.name ?? null,
+  roleId: role.id,
+  roleName: role.name,
+  permissions: (role.permissions ?? []).map(
+    (permission) => permission.name as PermissionName,
+  ),
+  status: role.status,
+});
+
 @Injectable()
 export class RoleService extends MembershipResolver {
   constructor(
@@ -56,7 +89,7 @@ export class RoleService extends MembershipResolver {
     userId: string,
   ): Promise<Membership | null> {
     const role = await this.roleRepo.findOne({
-      where: { organizationId, userId },
+      where: { organizationId, userId, status: 'active' },
       relations: { permissions: true },
     });
 
@@ -73,34 +106,76 @@ export class RoleService extends MembershipResolver {
     };
   }
 
-  async listMembers(organizationId: string): Promise<
-    {
-      userId: string;
-      email: string;
-      name: string | null;
-      roleId: string;
-      roleName: string;
-      permissions: PermissionName[];
-    }[]
-  > {
+  /**
+   * One member of the organization, with the status of their membership.
+   *
+   * Reads by `userId` rather than by role id because that is how the member
+   * endpoints address people, and it deliberately includes a deactivated
+   * membership: the admin reaching for `activate` has to be able to find the
+   * row they are reactivating.
+   */
+  async member(organizationId: string, userId: string): Promise<MemberSummary> {
+    const role = await this.roleRepo.findOne({
+      where: { organizationId, userId },
+      relations: { permissions: true, user: true },
+    });
+
+    if (!role || role.userId === null || role.user === null) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+
+    return describeMember(role);
+  }
+
+  async listMembers(organizationId: string): Promise<MemberSummary[]> {
     const roles = await this.roleRepo.find({
       where: { organizationId },
       relations: { permissions: true, user: true },
       order: { createdAt: 'ASC' },
     });
 
-    return roles
-      .filter((role) => role.userId !== null && role.user !== null)
-      .map((role) => ({
-        userId: role.userId as string,
-        email: role.user?.email ?? '',
-        name: role.user?.name ?? null,
-        roleId: role.id,
-        roleName: role.name,
-        permissions: (role.permissions ?? []).map(
-          (permission) => permission.name as PermissionName,
-        ),
-      }));
+    return roles.filter(hasMember).map(describeMember);
+  }
+
+  /**
+   * Suspends or restores a member's access to this organization.
+   *
+   * Idempotent on purpose: a member list with two admins on it will have both
+   * of them firing the same action, and answering the second one a 400 would
+   * turn a race into an error the caller cannot do anything about.
+   *
+   * The one refusal is self-deactivation. It is a footgun rather than a
+   * feature -- the member locks themselves out of the organization and needs
+   * another admin to notice -- so it is refused while the actor still has the
+   * `member.remove` permission to be refused on.
+   */
+  async setMemberStatus(
+    organizationId: string,
+    userId: string,
+    status: string,
+    actorUserId: string,
+  ): Promise<MemberSummary> {
+    const role = await this.roleRepo.findOne({
+      where: { organizationId, userId },
+      relations: { permissions: true, user: true },
+    });
+
+    if (!role || role.userId === null || role.user === null) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+
+    if (status === 'deactivated' && userId === actorUserId) {
+      throw new BadRequestException(
+        'You cannot deactivate your own membership. Ask another administrator to do it.',
+      );
+    }
+
+    if (role.status !== status) {
+      role.status = status;
+      await this.roleRepo.save(role);
+    }
+
+    return describeMember(role);
   }
 
   async addMember(organizationId: string, dto: AddMemberDto): Promise<Role> {
@@ -177,6 +252,21 @@ export class RoleService extends MembershipResolver {
     }
 
     await this.roleRepo.delete(role.id);
+  }
+
+  /**
+   * The membership row for this member, deactivated or not, or `null` when they
+   * are not in this organization.
+   *
+   * Deliberately does not throw and does not load the user: the caller -- the
+   * invitation flow, before it emails anybody -- already knows the address it is
+   * asking about and only needs to know whether a seat is already held.
+   */
+  async findMembership(
+    organizationId: string,
+    userId: string,
+  ): Promise<Role | null> {
+    return this.roleRepo.findOne({ where: { organizationId, userId } });
   }
 
   // --- roles ----------------------------------------------------------------
@@ -456,11 +546,22 @@ export class RoleService extends MembershipResolver {
       where: { organizationId, userId },
     });
 
-    if (existing) {
+    if (!existing) {
+      return;
+    }
+
+    // A deactivated member already holds the row this would create, so the
+    // honest answer names the action that actually works instead of a generic
+    // conflict that sends the caller round the loop to try `activate` anyway.
+    if (existing.status !== 'active') {
       throw new ConflictException(
-        'Member already has a role in this organization',
+        'Member is deactivated in this organization; activate them instead of adding them again',
       );
     }
+
+    throw new ConflictException(
+      'Member already has a role in this organization',
+    );
   }
 
   private async syncUserOrganization(
@@ -476,6 +577,19 @@ export class RoleService extends MembershipResolver {
     if (user.organizationId === null) {
       await users.update(userId, { organizationId });
     }
+  }
+
+  /**
+   * The default role template `templateKey` names, or a 400 listing the keys
+   * that do exist.
+   *
+   * Public because two callers outside this service resolve a template before
+   * they can write anything: `addMember`, and the invitation flow, which needs
+   * the template's display name and permissions while the invitation is still
+   * only an email that has not been sent yet.
+   */
+  templateFor(templateKey: string): RoleTemplate {
+    return this.findTemplate(templateKey);
   }
 
   private findTemplate(key: string) {

@@ -65,6 +65,33 @@ export class MailService {
     });
   }
 
+  /**
+   * The invitation itself: the only place the raw token exists in production.
+   *
+   * The body names the organization and the role, because the person receiving
+   * it has to decide whether to accept before the API will tell them anything
+   * -- and `GET /invitations/accept` is the link's destination, so the email and
+   * the preview it opens describe the same invitation.
+   */
+  async sendInvitationEmail(
+    email: string,
+    token: string,
+    details: { organizationName: string; roleName: string },
+  ): Promise<void> {
+    const link = buildEmailLink(this.baseUrl, 'accept-invitation', token);
+
+    await this.send({
+      to: email,
+      subject: `You have been invited to ${details.organizationName}`,
+      html: this.invitationTemplate({
+        link,
+        email,
+        organizationName: details.organizationName,
+        roleName: details.roleName,
+      }),
+    });
+  }
+
   private get baseUrl(): string | undefined {
     return this.config.get<string>('APP_BASE_URL');
   }
@@ -216,6 +243,84 @@ export class MailService {
                 >
                   This link will expire in 1 hour.
                   If you did not request a password reset, you can safely ignore this email.
+                </p>
+
+                <p
+                  style="margin:16px 0 0; font-size:13px; color:#8a8a9a;"
+                >
+                  Or paste this link into your browser:<br/>
+                  <span style="color:#4a4a5a;">${link}</span>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  private invitationTemplate({
+    link,
+    email,
+    organizationName,
+    roleName,
+  }: {
+    link: string;
+    email: string;
+    organizationName: string;
+    roleName: string;
+  }): string {
+    return `<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; background:#f4f4f7; margin:0; padding:0;">
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      style="background:#f4f4f7; padding:32px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="480"
+            cellpadding="0"
+            cellspacing="0"
+            style="background:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #e6e6eb;"
+          >
+            <tr>
+              <td style="padding:32px;">
+                <h2
+                  style="margin:0 0 16px; font-size:20px; color:#1a1a2e;"
+                >
+                  You have been invited
+                </h2>
+
+                <p
+                  style="margin:0 0 24px; font-size:15px; color:#4a4a5a; line-height:1.5;"
+                >
+                  <strong>${organizationName}</strong> invited
+                  <strong>${email}</strong> to join as
+                  <strong>${roleName}</strong>.
+                  Click the button to accept: if you do not have an account yet,
+                  you will choose a password on the next step.
+                </p>
+
+                <a
+                  href="${link}"
+                  style="display:inline-block; background:#ef4444; color:#ffffff; text-decoration:none; font-size:15px; font-weight:600; padding:12px 24px; border-radius:6px;"
+                >
+                  Accept invitation
+                </a>
+
+                <p
+                  style="margin:24px 0 0; font-size:13px; color:#8a8a9a; line-height:1.5;"
+                >
+                  This link will expire in 7 days.
+                  If you were not expecting this invitation, you can safely ignore this email.
                 </p>
 
                 <p

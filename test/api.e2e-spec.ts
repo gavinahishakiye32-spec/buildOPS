@@ -38,7 +38,8 @@ describe('BuildOps operational flow (e2e)', () => {
     hitExpirations: Map<string, unknown>;
   };
 
-  const mailTokens: { verify?: string; reset?: string } = {};
+  const mailTokens: { verify?: string; reset?: string; invitation?: string } =
+    {};
   const ownerToken: string[] = [];
   const memberToken: string[] = [];
   let ownerId: string;
@@ -125,6 +126,9 @@ describe('BuildOps operational flow (e2e)', () => {
         },
         sendResetPasswordEmail: async (_email: string, token: string) => {
           mailTokens.reset = token;
+        },
+        sendInvitationEmail: async (_email: string, token: string) => {
+          mailTokens.invitation = token;
         },
       })
       .compile();
@@ -841,6 +845,268 @@ describe('BuildOps operational flow (e2e)', () => {
       expect(await projectRepo.countBy({ organizationId, clientId })).toBe(1);
       expect(await teamRepo.countBy({ organizationId })).toBe(1);
       expect(await projectRepo.countBy({ organizationId })).toBe(1);
+    });
+  });
+
+  describe('invitations and member status', () => {
+    // The invitee accepted in the first test is the subject of the ones after
+    // it: suspended, refused, restored and finally removed outright.
+    let inviteEmail = '';
+    let inviteeId = '';
+    let inviteeToken = '';
+
+    const invite = (email: string, templateKey?: string) =>
+      asOwner(
+        request(server).post(api(`/organizations/${organizationId}/invitations`)),
+      ).send(templateKey ? { email, templateKey } : { email });
+
+    const asInvitee = (req: request.Test): request.Test =>
+      req
+        .set('Authorization', `Bearer ${inviteeToken}`)
+        .set('x-organization-id', organizationId);
+
+    /** Plan seats in use, counted from the subscription's own report. */
+    const seatsInUse = async (): Promise<number> => {
+      const usage = await asOwner(request(server).get(api('/subscription/usage'))).expect(
+        200,
+      );
+      const row = usage.body.find(
+        (entry: { resource: string }) => entry.resource === 'users',
+      );
+
+      expect(row).toBeDefined();
+      return row.used as number;
+    };
+
+    it('invites an address with no account behind it and accepts the emailed link', async () => {
+      clearThrottle();
+      inviteEmail = `invitee-${Date.now()}@example.com`;
+      const seatsBefore = await seatsInUse();
+
+      const created = await invite(inviteEmail, 'developer').expect(201);
+      expect(created.body).toEqual(
+        expect.objectContaining({
+          email: inviteEmail,
+          status: 'pending',
+          roleName: 'Developer',
+        }),
+      );
+      expect(created.body.emailSent).toBe(true);
+      expect(created.body.invitationLink).toContain('/invitations/accept');
+
+      // The token the invitee works with is the one the email carried.
+      expect(mailTokens.invitation).toEqual(expect.any(String));
+
+      // Nothing about the organization has changed yet: the role the
+      // invitation promises is only created when somebody accepts it.
+      expect(await seatsInUse()).toBe(seatsBefore);
+
+      const preview = await request(server)
+        .get(api('/invitations/accept'))
+        .query({ token: mailTokens.invitation })
+        .expect(200);
+      expect(preview.body).toEqual(
+        expect.objectContaining({
+          email: inviteEmail,
+          organizationName: expect.any(String),
+          roleName: 'Developer',
+          status: 'pending',
+          accountExists: false,
+        }),
+      );
+      expect(Array.isArray(preview.body.permissions)).toBe(true);
+
+      // An address with no account behind it: the credentials are what create
+      // that account, so accepting without them changes nothing.
+      await request(server)
+        .post(api('/invitations/accept'))
+        .send({ token: mailTokens.invitation })
+        .expect(400);
+
+      const accepted = await request(server)
+        .post(api('/invitations/accept'))
+        .send({
+          token: mailTokens.invitation,
+          name: 'Invitee',
+          password: 'password123',
+        })
+        .expect(201);
+      expect(accepted.body).toEqual(
+        expect.objectContaining({
+          message: 'Invitation accepted',
+          organizationId,
+          roleName: 'Developer',
+        }),
+      );
+
+      // The same link clicked twice is a documented conflict, not a second role.
+      await request(server)
+        .post(api('/invitations/accept'))
+        .send({
+          token: mailTokens.invitation,
+          name: 'Invitee',
+          password: 'password123',
+        })
+        .expect(409);
+
+      const members = await asOwner(
+        request(server).get(api(`/organizations/${organizationId}/members`)),
+      ).expect(200);
+      const invitee = members.body.find(
+        (member: { email: string }) => member.email === inviteEmail,
+      );
+      expect(invitee).toEqual(
+        expect.objectContaining({
+          userId: expect.any(String),
+          roleName: 'Developer',
+          status: 'active',
+        }),
+      );
+      inviteeId = invitee.userId as string;
+
+      // Acceptance claimed a seat, and the new member can sign in with the
+      // password that was set at acceptance.
+      expect(await seatsInUse()).toBe(seatsBefore + 1);
+
+      clearThrottle();
+      const login = await request(server)
+        .post(api('/auth/login'))
+        .send({ email: inviteEmail, password: 'password123' })
+        .expect(201);
+      inviteeToken = login.body.access_token as string;
+
+      const list = await asInvitee(request(server).get(api('/clients'))).expect(
+        200,
+      );
+      expect(Array.isArray(list.body.items)).toBe(true);
+    });
+
+    it('revokes an invitation so its link dies and its address can be invited again', async () => {
+      clearThrottle();
+      const email = `twice-${Date.now()}@example.com`;
+
+      const created = await invite(email).expect(201);
+
+      // Still pending: a second click would be a duplicate email nobody can
+      // act on, so it is refused until the first one is withdrawn.
+      await invite(email).expect(409);
+
+      const listed = await asOwner(
+        request(server).get(api(`/organizations/${organizationId}/invitations`)),
+      ).expect(200);
+      expect(listed.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ email, status: 'pending' }),
+        ]),
+      );
+
+      const row = listed.body.find(
+        (invitation: { email: string }) => invitation.email === email,
+      );
+      await asOwner(
+        request(server).delete(
+          api(`/organizations/${organizationId}/invitations/${row.id}`),
+        ),
+      ).expect(200);
+
+      // The emailed link no longer opens anything.
+      await request(server)
+        .get(api('/invitations/accept'))
+        .query({ token: created.body.invitationToken })
+        .expect(409);
+
+      // Revoking does not burn the address: it can be invited again at once.
+      const resent = await invite(email).expect(201);
+      await asOwner(
+        request(server).delete(
+          api(`/organizations/${organizationId}/invitations/${resent.body.id}`),
+        ),
+      ).expect(200);
+    });
+
+    it('suspends a member without freeing their plan seat, and restores them', async () => {
+      clearThrottle();
+      const seats = await seatsInUse();
+
+      const suspended = await asOwner(
+        request(server).post(
+          api(`/organizations/${organizationId}/members/${inviteeId}/deactivate`),
+        ),
+      ).expect(200);
+      expect(suspended.body).toEqual(
+        expect.objectContaining({ userId: inviteeId, status: 'deactivated' }),
+      );
+
+      // The membership no longer resolves, so every organization-scoped call
+      // they make is refused even though their role still exists.
+      await asInvitee(request(server).get(api('/clients'))).expect(403);
+
+      // Re-inviting would look like a fix and is not one: it points at the
+      // endpoint that brings the same membership back.
+      const reinvented = await invite(inviteEmail).expect(409);
+      expect(reinvented.body.message).toContain('activate them instead');
+
+      // The seat they were holding is still theirs: only a removal frees it.
+      expect(await seatsInUse()).toBe(seats);
+
+      const restored = await asOwner(
+        request(server).post(
+          api(`/organizations/${organizationId}/members/${inviteeId}/activate`),
+        ),
+      ).expect(200);
+      expect(restored.body).toEqual(
+        expect.objectContaining({ userId: inviteeId, status: 'active' }),
+      );
+
+      // The same membership, back where it was: same role, same permissions,
+      // same seat -- not a new row and not a second seat.
+      await asInvitee(request(server).get(api('/clients'))).expect(200);
+      expect(await seatsInUse()).toBe(seats);
+    });
+
+    it('refuses to let an administrator deactivate their own membership', async () => {
+      clearThrottle();
+
+      const self = await asOwner(
+        request(server).post(
+          api(`/organizations/${organizationId}/members/${ownerId}/deactivate`),
+        ),
+      ).expect(400);
+      expect(self.body.message).toContain('cannot deactivate your own');
+
+      const members = await asOwner(
+        request(server).get(api(`/organizations/${organizationId}/members`)),
+      ).expect(200);
+      expect(
+        members.body.find(
+          (member: { userId: string }) => member.userId === ownerId,
+        ),
+      ).toEqual(expect.objectContaining({ status: 'active' }));
+    });
+
+    it('removes a member outright and frees their plan seat', async () => {
+      clearThrottle();
+      const seats = await seatsInUse();
+
+      await asOwner(
+        request(server).delete(
+          api(`/organizations/${organizationId}/members/${inviteeId}`),
+        ),
+      ).expect(200);
+
+      // Removal, unlike suspension, is what gives the seat back.
+      expect(await seatsInUse()).toBe(seats - 1);
+
+      const members = await asOwner(
+        request(server).get(api(`/organizations/${organizationId}/members`)),
+      ).expect(200);
+      expect(
+        members.body.find(
+          (member: { email: string }) => member.email === inviteEmail,
+        ),
+      ).toBeUndefined();
+
+      await asInvitee(request(server).get(api('/clients'))).expect(403);
     });
   });
 });

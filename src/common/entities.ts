@@ -4,6 +4,7 @@ import { Subscription } from '../subscription/subscription.entity.js';
 import { Organization } from '../organization/organization.entity.js';
 import { Role } from '../role/role.entity.js';
 import { Permission } from '../role/permission.entity.js';
+import { OrganizationInvitation } from '../invitation/invitation.entity.js';
 import { Badge } from '../badge/badge.entity.js';
 import { Team } from '../team/team.entity.js';
 import { TeamMember } from '../team/team-member.entity.js';
@@ -25,6 +26,7 @@ export const ENTITIES = [
   Organization,
   Role,
   Permission,
+  OrganizationInvitation,
   Badge,
   Team,
   TeamMember,

@@ -20,8 +20,9 @@ BuildOps is a multi-tenant platform for managing clients, projects, teams, tasks
 | Tenant | id, user_id, plan_id, status, created_at, updated_at | Represents the subscribed customer/owner and connects the account to its selected Plan. |
 | Plan | id, name, description, max_users, max_projects, max_storage_gb, max_organizations, price | Defines subscription capacity and commercial limits applied to a Tenant. |
 | Organization | id, tenant_id, name, status, created_at | Represents a company/workspace under a Tenant. |
-| Role | id, organization_id, user_id, name, description, created_at, updated_at | Defines an access role for members of an Organization, such as Developer, Tester or Project Manager. |
+| Role | id, organization_id, user_id, name, description, status, created_at, updated_at | Defines an access role for members of an Organization, such as Developer, Tester or Project Manager. `status` carries the membership state: `active` or `deactivated`. |
 | Permission | id, role_id, name, description, created_at, updated_at | Defines an action or access capability granted through a Role within an Organization. |
+| OrganizationInvitation | id, organization_id, email, template_key, role_name, token_hash, status, expires_at, invited_by, created_at | Holds an invitation emailed to an address that has no account yet. The Role it promises is only created when the link is accepted; the raw token exists only in the email, never in the database. |
 | Badge | id, organization_id, name, description, color, icon | Provides organization-defined labels/classification that can be attached to Tasks. |
 | Team | id, organization_id, name, description, status, created_at | Represents a working group inside an Organization. |
 | TeamMember | id, team_id, user_id, role, status, joined_at | Connects Users to Teams and stores team membership and team-specific role/status. |
@@ -92,8 +93,17 @@ The following field-level definitions align with the BuildOps ERD and are the au
 | user_id | UUID (FK) | Applicable User (organization member) |
 | name | VARCHAR(255) | Role name (e.g. Developer, Tester, Project Manager) |
 | description | TEXT | Role description |
+| status | VARCHAR(20) | Membership status: `active` (default) or `deactivated` |
 | created_at | TIMESTAMP | Record creation timestamp |
 | updated_at | TIMESTAMP | Record update timestamp |
+
+A Role row with a `user_id` is the membership, so `status` is what makes a
+member a *suspended* member: `deactivated` keeps the row, the permissions and
+the plan seat, but the membership stops resolving, so every organization-scoped
+request the member makes is refused until it is set back to `active`. Only one
+`active` row may exist per (organization, user), and inviting an address whose
+membership is `deactivated` is refused with a message that points at
+reactivation instead of creating a second role.
 
 ### 3.6 Permission
 
@@ -217,6 +227,27 @@ The following field-level definitions align with the BuildOps ERD and are the au
 | min_time | TIMESTAMP | Minimum expected time boundary |
 | max_time | TIMESTAMP | Maximum expected time boundary |
 
+### 3.16 OrganizationInvitation
+
+| Field | Type | Notes |
+|---|---|---|
+| id | UUID (PK) | Primary identifier |
+| organization_id | UUID (FK) | Inviting Organization |
+| email | VARCHAR(255) | Invited address, normalized (trimmed, lower case) |
+| template_key | VARCHAR(50) | Role template the invitation promises (owner, project_manager, developer, tester, viewer) |
+| role_name | VARCHAR(255) | Display name of that template at invite time, so history survives a template edit |
+| token_hash | VARCHAR(64) | SHA-256 of the emailed token; the raw token is never stored |
+| status | VARCHAR(20) | `pending`, `accepted` or `revoked`; `expired` is derived from `expires_at`, never stored |
+| expires_at | TIMESTAMP | End of the seven-day window |
+| invited_by | UUID (FK) | User who sent the invitation |
+| accepted_at | TIMESTAMP | When it was accepted, null otherwise |
+| created_at | TIMESTAMP | Record creation timestamp |
+| updated_at | TIMESTAMP | Record update timestamp |
+
+The table deliberately has no `user_id` and no `role_id`: an invitation belongs to an address, not to an account, because at invite time the invitee may not have an account yet. The Role it promises is created only on acceptance, at which point the account exists and the plan seat can be checked against a real user — so an invitation nobody accepted consumes no capacity.
+
+**Constraints:** one `pending` invitation per (organization, email), enforced by a partial unique index over `status = 'pending'`, and one token per invitation. Rows are kept after use rather than deleted: an accepted invitation is the record of how somebody joined, and a revoked one is what makes "this invitation was revoked" distinguishable from "there is no such invitation". A lapsed pending row is deleted when the same address is invited again, so the unique index holds a fresh invitation instead of a dead one.
+
 ## 4. Authentication, Subscription & Tenant Model
 
 ### 4.1 Registration
@@ -257,6 +288,8 @@ For a protected request, the backend should:
 
 **Role/permission responsibility:** Role and Permission define what an organization member can do within that Organization. TeamMember.role remains available for team-specific membership information and should not be treated as the source of organization-level access.
 
+**Membership state:** a Role row whose `status` is `deactivated` resolves to nothing. The member keeps the role, its permissions and their plan seat, but every organization-scoped request they make is refused until the membership is activated again. Deactivation is refused for the acting administrator's own membership, so an organization can never be left without somebody able to restore it. Removing the member (`DELETE …/members/{userId}`) is the operation that destroys the membership and frees the seat.
+
 ## 6. Role & Permission Management Workflow
 
 **Flow:** Organization → Create Role → Attach Permissions → Assign applicable Role to Organization Member → User makes request → Permission Check → Allow/Deny
@@ -264,6 +297,8 @@ For a protected request, the backend should:
 An authorized organization administrator creates a Role and defines its description. Permissions are then associated with that Role. When a User performs an action, the backend evaluates the User's applicable Role and the Permissions attached to it.
 
 Example: a Developer role may be allowed to create and update development tasks, a Tester role may be allowed to update testing status and test-related work, while a Project Manager may be allowed to create and update projects and tasks. The exact permission names should be defined by the application and kept consistent across API endpoints.
+
+**Adding a member who has no account yet:** when the invited address has no User row, there is nothing to attach a Role to. The administrator therefore invites the address instead: an `OrganizationInvitation` holds the address, the role template and the hash of a token sent by email, and the Role — and the plan seat it consumes — are created only when the invitation is accepted through the emailed link, which also creates the account. One pending invitation per address; a second is refused until the first is revoked or expires after seven days. Inviting an address whose membership exists but is deactivated is refused as well, with the answer naming activation rather than a second role.
 
 ## 7. Team Management
 
@@ -359,7 +394,7 @@ When a TimeEntry is recorded against a Subtask, the backend can compare actual d
 3. Tenant is created/activated with the selected plan.
 4. Tenant creates one or more Organizations within plan limits.
 5. Organization configures Roles and attaches Permissions.
-6. Users are associated with the appropriate organization-level access role.
+6. Users are associated with the appropriate organization-level access role — directly when the account already exists, or through an emailed invitation that creates the role on acceptance when it does not.
 7. Organization creates Teams and adds Users through TeamMember.
 8. Organization creates Clients with contact fields (email, phone, industry, website) and status.
 9. Organization creates Projects and links them to Clients, subject to max_projects, with start_date, end_date and budget.

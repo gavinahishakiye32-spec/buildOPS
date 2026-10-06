@@ -22,13 +22,15 @@ generated OpenAPI document (see [Live spec](#1-live-spec)).
 Every route below lives under the global prefix `api/v1` — include it in your
 `baseURL` so you never hard-code it in a path. `PORT` overrides `3000`.
 
-The document is published **incrementally, one module at a time**. It currently
-covers **22 endpoints** in 4 tag groups — `auth`, `plans`, `subscription` and
-`organizations`, from `POST /auth/register` through the organization endpoints.
-The other modules are implemented and served but carry `@ApiExcludeController()`
-and are absent from the document until they are documented; the rest of this
-guide describes them anyway, so treat the Swagger document as the authority on
-shape and this guide as the authority on behaviour.
+The document is published **one module at a time**. It currently covers **119
+endpoints** in 16 tag groups — `auth`, `plans`, `subscription`, `organizations`,
+`roles`, `invitations`, `teams`, `clients`, `projects`, `badges`, `tasks`,
+`subtasks`, `time-entries`, `time-complexity`, `dashboard` and `settings` — from
+`POST /auth/register` through the invitation flow. The liveness probe is the
+only controller still hidden with `@ApiExcludeController()`; a route that is
+missing from the document is not published yet. Where the document and this
+guide disagree, treat the Swagger document as the authority on shape and this
+guide as the authority on behaviour.
 
 Do not hand-maintain a client from this document: generate types from
 `docs/openapi.json` (openapi-typescript, Orval, `swagger-typescript-api`) and use
@@ -400,13 +402,14 @@ restore, unlike the content deletes in §8.4.
 
 ## 4. Email deep links
 
-Both emails contain a link built from `APP_BASE_URL` (default
+Every email contains a link built from `APP_BASE_URL` (default
 `http://localhost:3000`, i.e. **the API host**):
 
-| Email               | Link                                                |
-| ------------------- | --------------------------------------------------- |
-| Verify your email   | `{APP_BASE_URL}/api/v1/auth/verify-email?token=…`   |
-| Reset your password | `{APP_BASE_URL}/api/v1/auth/reset-password?token=…` |
+| Email                    | Link                                                |
+| ------------------------ | --------------------------------------------------- |
+| Verify your email        | `{APP_BASE_URL}/api/v1/auth/verify-email?token=…`   |
+| Reset your password      | `{APP_BASE_URL}/api/v1/auth/reset-password?token=…` |
+| You have been invited    | `{APP_BASE_URL}/api/v1/invitations/accept?token=…`  |
 
 Consequences for the frontend:
 
@@ -421,16 +424,23 @@ Consequences for the frontend:
    anything. Own a `/reset-password?token=…` page, read the token from the
    query string, and submit it as `POST /auth/reset-password` with the new
    password.
-3. Tokens are opaque 32-byte hex strings, valid once, and stored hashed. They
+3. **The invitation link follows the same split, in the other order.** `GET
+   /invitations/accept?token=…` is the preview the landing page should call to
+   show who invited whom, under which role, and whether the address already has
+   an account; `POST /invitations/accept` is what actually creates the
+   membership. Own an `/invitations/accept?token=…` route, keep the token out of
+   analytics, and be ready for `409` when the link has already been used.
+4. Tokens are opaque 32-byte hex strings, valid once, and stored hashed. They
    arrive in the query string — strip them from client-side analytics and logs.
-4. **Outside production** the API returns the same links in JSON as well:
+5. **Outside production** the API returns the same links in JSON as well:
    `POST /auth/register` answers with `verificationToken` + `verificationLink`,
    `POST /auth/forgot-password` with `resetToken` + `resetLink` (only for an
-   existing account, so the unknown-email answer stays identical), and the
-   `403` of an unverified login carries the fresh `verificationToken` too. Each
-   of those responses also carries `emailSent` and, when the send failed,
-   `emailError`. Production responses never contain a token: there it exists
-   only in the email.
+   existing account, so the unknown-email answer stays identical), the `403` of
+   an unverified login carries the fresh `verificationToken` too, and
+   `POST /organizations/{organizationId}/invitations` with `invitationToken` +
+   `invitationLink`. Each of those responses also carries `emailSent` and, when
+   the send failed, `emailError`. Production responses never contain a token:
+   there it exists only in the email.
 
 ---
 
@@ -549,8 +559,22 @@ POST /subscription   { planId, status? }       (creates or reactivates the subsc
       ↓
 POST /organizations  { name, status? }        (creator receives the Owner role)
       ↓
-POST /organizations/{organizationId}/members  { userId | email, templateKey }
+POST /organizations/{organizationId}/members      { userId | email, templateKey }
+  — or, when the address has no account yet —
+POST /organizations/{organizationId}/invitations  { email, templateKey? }
+      ↓ the invitee opens the emailed /api/v1/invitations/accept?token=…
+POST /invitations/accept  { token, name?, password? }   (creates the account and the role)
 ```
+
+`POST /members` and `POST /invitations` are two doors into the same room: the
+first grants access to an account that already exists (and `404`s when the email
+has none), the second emails a link and creates the role only when somebody
+clicks it — no plan seat is claimed for an invitation nobody has accepted. Only
+one of them can be pending per address: a second invitation for an address that
+is already invited is `409` until the first is revoked (`DELETE
+/organizations/{organizationId}/invitations/{invitationId}`), and an invitation
+for somebody who is already a member is `409` as well — with a message that
+names `…/members/{userId}/activate` when that membership is merely suspended.
 
 `GET /plans` is public and returns three seeded plans ordered by price:
 
@@ -828,9 +852,13 @@ API serves but the Swagger document does not yet list.
 | `POST` | `/auth/reset-password`  | `{ token, password }`        | `201 { message }`       | `400`               |
 | `GET`  | `/auth/reset-password`  | `?token`                     | `200 { message }`       | `400`               |
 | `GET`  | `/plans`                | —                            | `200 PlanResponseDto[]` | —                   |
+| `GET`  | `/invitations/accept`   | `?token`                     | `200 InvitationPreviewResponseDto` | `400`, `409` |
+| `POST` | `/invitations/accept`   | `{ token, name?, password? }` | `201 { message, organizationId, roleId, roleName }` | `400`, `409` |
 
 Outside production, `register` and `forgot-password` (for an existing account)
 also return the raw token and link, plus `emailSent`/`emailError` — see §4.
+The invitation routes are public on purpose: the person accepting has no
+membership yet, and usually no account either.
 
 ### 9.2 Authenticated, tenant-level (no organization needed)
 
@@ -875,13 +903,38 @@ defaults to `active`.
 | `POST`   | `/organizations/{organizationId}/members`                    | `member.invite`       | path | `400`, `403`, `404`, `409` |
 | `PATCH`  | `/organizations/{organizationId}/members/{userId}`           | `member.update`       | path | `403`, `404`               |
 | `DELETE` | `/organizations/{organizationId}/members/{userId}`           | `member.remove`       | path | `403`, `404`               |
+| `POST`   | `/organizations/{organizationId}/members/{userId}/deactivate` | `member.remove`      | path | `400`, `403`, `404`        |
+| `POST`   | `/organizations/{organizationId}/members/{userId}/activate` | `member.update`       | path | `403`, `404`               |
+| `POST`   | `/organizations/{organizationId}/invitations`               | `member.invite`       | path | `400`, `403`, `409`        |
+| `GET`    | `/organizations/{organizationId}/invitations`               | `member.view`         | path | `403`                      |
+| `DELETE` | `/organizations/{organizationId}/invitations/{invitationId}` | `member.invite`      | path | `403`, `404`, `409`        |
 
 Behaviour worth encoding in the UI:
 
 - `POST /members` takes **either** `userId` **or** `email`, plus `templateKey`
   (`owner | project_manager | developer | tester | viewer`). It grants access to
   an account that already exists — it does not send an invitation email, and it
-  fails with `404` if the email has no account yet.
+  fails with `404` if the email has no account yet. To bring in an address that
+  has no account, use `POST /invitations` instead.
+- **Suspending a member does not remove them.** `POST …/members/{userId}/deactivate`
+  keeps the role, the permissions and the plan seat, but the membership stops
+  resolving, so every organization-scoped call the suspended member makes
+  answers `403` from the next request on. It is idempotent, and `400` for your
+  own membership — an administrator cannot lock the organization out alone.
+  `POST …/members/{userId}/activate` brings that same membership back (same
+  role, same seat, not a new row). Only `DELETE …/members/{userId}` destroys it
+  and gives the seat back.
+- **An invitation is a pending row with a seven-day window.** `POST /invitations`
+  answers `201` with the invitation — and, outside production, `invitationToken`,
+  `invitationLink` and `emailSent` — `409` if that address is already invited or
+  already a member (the message points at `…/members/{userId}/activate` when the
+  membership is suspended), `400` for a malformed address or an unknown
+  `templateKey`. `GET /invitations` lists them, finished ones included, with
+  `status` reported as `expired` for a pending row whose window has closed.
+  `DELETE /invitations/{invitationId}` revokes: the emailed link stops working
+  (`409` on both accept routes) and the address can be invited again at once; an
+  already-accepted invitation is `409`, because the membership it created is
+  removed with `DELETE …/members/{userId}`, not here.
 - A member holds exactly one role. `PATCH /members/{userId}` **replaces** it.
 - `PUT /roles/{roleId}/permissions` replaces the whole set — send the complete
   list, not a delta. Unknown permission strings are `400`.
@@ -1073,6 +1126,8 @@ Shared query parameters on `overview`, `projects` and `clients`:
 | `organization.status`, `team.status`, `client.status` | `active`, `inactive`, `archived`                                                 |
 | `teamMember.status`                                   | `pending`, `active`, `inactive`, `removed`                                       |
 | `teamMember.role`                                     | `lead`, `member`, `observer`                                                     |
+| `member.status`                                       | `active`, `deactivated`                                                          |
+| `invitation.status`                                   | `pending`, `accepted`, `revoked`, `expired` (the last is reported, never stored) |
 | `project.status`                                      | `planned`, `active`, `on_hold`, `completed`, `cancelled`                         |
 | `task.status`                                         | `todo`, `in_progress`, `in_review`, `done`, `cancelled`                          |
 | `task.priority`, `timeComplexity.name`                | `low`, `medium`, `high`, `critical`                                              |
@@ -1103,7 +1158,16 @@ body: `{ name, status? }`.
 (each `{ id, roleId, name, description, createdAt }`), `createdAt`/`updatedAt` ro.
 
 **Member** (`MemberResponseDto`): `userId`, `email`, `name | null`, `roleId`,
-`roleName`, `permissions[]` (dotted strings, not objects).
+`roleName`, `status` (`active` | `deactivated`), `permissions[]` (dotted
+strings, not objects).
+
+**Invitation** (`InvitationResponseDto`): `id` ro, `organizationId` ro, `email`,
+`templateKey`, `roleName`, `status`, `expiresAt`, `invitedBy | null`,
+`acceptedAt | null`, `createdAt` ro. `POST` answers with
+`CreateInvitationResponseDto` (the same fields, plus `invitationToken`,
+`invitationLink`, `emailSent`, `emailError` outside production). `GET /invitations/accept` answers with
+`InvitationPreviewResponseDto`: `email`, `organizationName`, `roleName`,
+`status`, `expiresAt`, `accountExists`, `permissions[]`.
 
 **Team**: `id`, `organizationId` ro, `name`, `description | null`, `status`,
 `createdAt` ro.
@@ -1171,9 +1235,12 @@ tasks, and `0` on `/dashboard/overview` when the organization has no tasks.
 - [ ] `x-organization-id` preflight verified once in a real browser (§2)
 - [ ] Verification page reads `?token=` and calls `GET /auth/verify-email`; treats `Email already verified` as success
 - [ ] Reset page reads `?token=` from its **own** route and POSTs to `/auth/reset-password`; the emailed URL itself only validates the token (`GET /auth/reset-password`), it never resets anything
+- [ ] Invitation page owns `/invitations/accept?token=…`: `GET` first to show who invited whom, `POST` only on submit; `409` means the link was already used (§4)
+- [ ] Accepting on behalf of a brand-new account sends `token`, `name` and `password` together — a `400` on accept means the credentials were missing or the token is dead
 - [ ] Password inputs validated with `^(?=.*[A-Za-z])(?=.*\d).{8,128}$` before submit
 - [ ] Password change and email change both re-authenticate the user afterwards: both end the token in hand (§3.8)
 - [ ] `403 Missing required permission` → hide/disable the control, do not retry
+- [ ] `status: deactivated` on a member row → offer "Activate", never "Invite"; re-inviting a suspended member answers `409` and names the activate route (§9.3)
 - [ ] `404` mentioning `x-organization-id` → switch organization, not an empty-state message
 - [ ] `409` on `POST /subscription` → route the user to plan change (`PATCH /subscription/plan`)
 - [ ] `400 Plan limit reached…` / `Subscription is cancelled…` → prompt to upgrade/reactivate
@@ -1196,8 +1263,13 @@ discovering them in QA:
    as long as its holder kept using it.
 2. **The reset email link targets the API, and with the wrong verb.** It needs a
    frontend-owned page (see §4).
-3. **Invitations are not emails.** `POST /organizations/{id}/members` requires an
-   existing account; nothing is emailed, so invite flows need your own UI.
+3. **Invitation links point at the API host, and there is no resend.** The
+   invitation email is built from `APP_BASE_URL` like verification and reset
+   (§4), so the invitee lands on raw JSON unless you own an
+   `/invitations/accept?token=…` page. A pending invitation lives seven days and
+   then reports `expired`; there is no reminder and no resend button — a fresh
+   link is `DELETE /invitations/{invitationId}` followed by a new
+   `POST /invitations`.
 4. **Deletes cascade, sometimes quietly.** Deleting an organization removes all of
    its records; deleting a team removes memberships and task assignments;
    deleting a project removes its tasks, their subtasks **and the time logged
@@ -1207,8 +1279,9 @@ discovering them in QA:
    exist; there is no `sort`, `search`, `orderBy` or date-range parameter on list
    endpoints.
 6. **No soft deletes.** Deletes are hard, and the only "archived" concept is the
-   `status` enum on organizations, teams, clients and time-complexity estimates.
-   Nothing is recoverable from the UI.
+   `status` enum on organizations, teams, clients and time-complexity estimates —
+   plus `member.status`, which suspends a membership instead of deleting it
+   (§9.3). Nothing a delete removed is recoverable from the UI.
 7. **`?userId` on time entries is ignored without `view_all`** — a silent
    filter, not a `403`.
 8. **Swagger docs, not this file, are the schema source of truth.** If the two

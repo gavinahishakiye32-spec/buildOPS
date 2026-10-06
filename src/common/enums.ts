@@ -139,6 +139,42 @@ export const TEAM_MEMBER_STATUSES = [
 
 export const TEAM_MEMBER_ROLES = ['lead', 'member', 'observer'] as const;
 
+/**
+ * Whether an organization membership is live.
+ *
+ * `deactivated` is a suspension, not a deletion: the member keeps their role,
+ * their permissions and their seat, and `activate` puts them back. What they
+ * lose is access, because `RoleService.resolve` -- the query every
+ * organization-scoped request is authorized through -- only resolves an
+ * `active` membership.
+ *
+ * Removal is a different operation (`DELETE /members/:userId`), which is what
+ * frees a plan seat.
+ */
+export const MEMBER_STATUSES = ['active', 'deactivated'] as const;
+
+/**
+ * The states of an invitation.
+ *
+ * `expired` is never stored. The row keeps `status = 'pending'` with an
+ * `expires_at` in the past, and responses report `expired` for it, so the
+ * read-only sweep a background job would otherwise need never has to run and a
+ * lapsed invitation cannot be mistaken for one that is still waiting.
+ */
+export const INVITATION_STATUSES = [
+  'pending',
+  'accepted',
+  'revoked',
+  'expired',
+] as const;
+
+/** Stored invitation statuses; the subset a row can actually hold. */
+export const STORED_INVITATION_STATUSES = [
+  'pending',
+  'accepted',
+  'revoked',
+] as const;
+
 export const CLIENT_STATUSES = ['active', 'inactive', 'archived'] as const;
 
 export const PROJECT_STATUSES = [

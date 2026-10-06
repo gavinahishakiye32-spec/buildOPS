@@ -36,6 +36,24 @@ export class Role {
   @JoinColumn({ name: 'user_id' })
   user: User | null;
 
+  /**
+   * Membership status: `active` while the member may use the organization,
+   * `deactivated` while their access is suspended.
+   *
+   * It is only meaningful once `userId` is set -- an unassigned role definition
+   * has no member to suspend -- which is why it is reported by the member
+   * endpoints rather than by `toResponse()`. Read through
+   * {@link RoleService.resolve}, this column is what a deactivation actually
+   * does: an inactive membership resolves to no membership at all, so every
+   * organization-scoped request fails the permission guard from then on.
+   *
+   * The column is deliberately not `@DeleteDateColumn`. Deactivation is
+   * reversible state a colleague has to be able to see in a list, not a filter
+   * that hides the row from every query it is not expected in.
+   */
+  @Column({ type: 'varchar', length: 20, default: 'active' })
+  status: string;
+
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
