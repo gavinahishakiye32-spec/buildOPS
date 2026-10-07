@@ -14,6 +14,7 @@ import { RefreshToken } from './refresh-token.entity.js';
 import { SessionService } from './session.service.js';
 import { SessionCleanupService } from './session-cleanup.service.js';
 import { SessionCookies } from './session-cookies.js';
+import { SignedTokens } from './signed-tokens.js';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { SessionCookies } from './session-cookies.js';
     SessionService,
     SessionCookies,
     SessionCleanupService,
+    SignedTokens,
     // Guards are provided here so every feature module can reference them
     // through @Protected() without importing JwtModule/PassportModule itself.
     JwtAuthGuard,
@@ -58,6 +60,10 @@ import { SessionCookies } from './session-cookies.js';
     // invitee in, and the cookies have to be written by the one class that
     // knows their flags and paths.
     SessionCookies,
+    // Invitation tokens are signed with the same secret and checked against the
+    // same rules as every other purpose-bound token, so they are minted here
+    // rather than by a second signer in the invitation module.
+    SignedTokens,
   ],
 })
 export class AuthModule {}

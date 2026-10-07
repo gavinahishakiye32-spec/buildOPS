@@ -8,11 +8,11 @@ import {
 export class ResetPasswordDto {
   @ApiProperty({
     description: 'Password reset token received by email',
-    example: 'e04aab9c26ee8d3d4d2e6f8d12f10c9affc4b6de3b8f861e2a3c5d9e7f6a4b1c',
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0MmQ…c5Vw',
   })
   @IsString()
   @MinLength(10)
-  @MaxLength(128)
+  @MaxLength(2048)
   token: string;
 
   @ApiProperty({ example: 'newSecurePass1', minLength: 8 })

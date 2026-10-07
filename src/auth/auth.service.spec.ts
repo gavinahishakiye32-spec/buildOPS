@@ -14,6 +14,23 @@ import { AuthService } from './auth.service.js';
 import { UserService } from '../user/user.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { SessionService } from './session.service.js';
+import { SignedTokens } from './signed-tokens.js';
+
+/**
+ * A real signer, so the tokens the service hands out and the tokens it is asked
+ * to check are the same kind of object: the service now rejects anything that
+ * is not a signed JWT carrying the right `purpose`.
+ */
+const signer = new JwtService({
+  secret: 'test-secret',
+  signOptions: { expiresIn: 3600 },
+});
+
+const signedToken = (
+  purpose: string,
+  claims: Record<string, unknown> = {},
+): string =>
+  signer.sign({ ...claims, purpose }, { expiresIn: 3600, jwtid: 'jti-fixed' });
 
 describe('AuthService', () => {
   let authService: AuthService;
@@ -33,6 +50,7 @@ describe('AuthService', () => {
 
   let jwtService: {
     sign: any;
+    verify: any;
   };
 
   let mailService: {
@@ -91,7 +109,12 @@ describe('AuthService', () => {
     };
 
     jwtService = {
-      sign: jest.fn().mockReturnValue('signed-token'),
+      sign: jest.fn((payload: any, options?: any) =>
+        signer.sign(payload, options),
+      ),
+      verify: jest.fn((token: string, options?: any) =>
+        signer.verify(token, options),
+      ),
     };
 
     mailService = {
@@ -138,6 +161,10 @@ describe('AuthService', () => {
           useValue: jwtService,
         },
         {
+          provide: SignedTokens,
+          useClass: SignedTokens,
+        },
+        {
           provide: MailService,
           useValue: mailService,
         },
@@ -178,7 +205,14 @@ describe('AuthService', () => {
 
       expect(result.user).not.toHaveProperty('passwordHash');
       expect(result).not.toHaveProperty('access_token');
-      expect(jwtService.sign).not.toHaveBeenCalled();
+      // Signing happens -- the verification token is a signed JWT too -- but an
+      // access token has no `purpose` claim, so none of those may exist yet.
+      expect(
+        jwtService.sign.mock.calls.some(
+          ([payload]: [Record<string, unknown>]) =>
+            payload.purpose === undefined,
+        ),
+      ).toBe(false);
 
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
@@ -300,7 +334,12 @@ describe('AuthService', () => {
         { userAgent: 'jest', ip: '127.0.0.1' },
       );
 
-      expect(result.access_token).toBe('signed-token');
+      const payload = signer.verify(result.access_token) as {
+        sid?: string;
+        purpose?: string;
+      };
+      expect(payload.sid).toBe('family-1');
+      expect(payload.purpose).toBeUndefined();
       expect(userService.setVerificationToken).not.toHaveBeenCalled();
       expect(mailService.sendVerificationEmail).not.toHaveBeenCalled();
     });
@@ -324,7 +363,12 @@ describe('AuthService', () => {
         .catch((caught: unknown) => caught)) as ForbiddenException;
 
       expect(error).toBeInstanceOf(ForbiddenException);
-      expect(jwtService.sign).not.toHaveBeenCalled();
+      expect(
+        jwtService.sign.mock.calls.some(
+          ([payload]: [Record<string, unknown>]) =>
+            payload.purpose === undefined,
+        ),
+      ).toBe(false);
       expect(userService.setVerificationToken).toHaveBeenCalledTimes(1);
 
       const [userId, storedToken, expires] = userService.setVerificationToken
@@ -676,10 +720,11 @@ describe('AuthService', () => {
         verificationTokenExpires: new Date(Date.now() + 60_000),
       });
 
-      const result = await authService.verifyEmail('raw-verification-token');
+      const token = signedToken('email_verification', { sub: 'user-1' });
+      const result = await authService.verifyEmail(token);
 
       expect(userService.findByVerificationToken).toHaveBeenCalledWith(
-        createHash('sha256').update('raw-verification-token').digest('hex'),
+        createHash('sha256').update(token).digest('hex'),
       );
 
       expect(userService.markVerified).toHaveBeenCalledWith('user-1');
@@ -704,7 +749,7 @@ describe('AuthService', () => {
       });
 
       await expect(
-        authService.verifyEmail('expired-token'),
+        authService.verifyEmail(signedToken('email_verification')),
       ).rejects.toBeInstanceOf(BadRequestException);
 
       expect(userService.markVerified).not.toHaveBeenCalled();
@@ -717,7 +762,9 @@ describe('AuthService', () => {
         verificationTokenExpires: new Date(Date.now() + 60_000),
       });
 
-      const result = await authService.verifyEmail('used-token');
+      const result = await authService.verifyEmail(
+        signedToken('email_verification'),
+      );
 
       expect(result.message).toBe('Email already verified');
       expect(userService.markVerified).not.toHaveBeenCalled();
@@ -787,13 +834,14 @@ describe('AuthService', () => {
         resetTokenExpires: new Date(Date.now() + 60_000),
       });
 
+      const token = signedToken('password_reset', { sub: 'user-1' });
       const result = await authService.resetPassword({
-        token: 'raw-reset-token',
+        token,
         password: 'new-password',
       });
 
       expect(userService.findByResetToken).toHaveBeenCalledWith(
-        createHash('sha256').update('raw-reset-token').digest('hex'),
+        createHash('sha256').update(token).digest('hex'),
       );
 
       expect(userService.updatePassword).toHaveBeenCalledWith(
@@ -825,7 +873,7 @@ describe('AuthService', () => {
 
       await expect(
         authService.resetPassword({
-          token: 'expired-token',
+          token: signedToken('password_reset'),
           password: 'new-password',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -841,10 +889,11 @@ describe('AuthService', () => {
         resetTokenExpires: new Date(Date.now() + 60_000),
       });
 
-      const result = await authService.validateResetToken('raw-reset-token');
+      const token = signedToken('password_reset', { sub: 'user-1' });
+      const result = await authService.validateResetToken(token);
 
       expect(userService.findByResetToken).toHaveBeenCalledWith(
-        createHash('sha256').update('raw-reset-token').digest('hex'),
+        createHash('sha256').update(token).digest('hex'),
       );
       expect(result.message).toContain('Reset token is valid');
 
@@ -865,8 +914,20 @@ describe('AuthService', () => {
       userService.findByResetToken.mockResolvedValue(null);
 
       await expect(
-        authService.validateResetToken('bad-token'),
+        authService.validateResetToken(signedToken('password_reset')),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('throws BadRequestException for a token signed for another purpose', async () => {
+      userService.findByResetToken.mockResolvedValue(null);
+
+      await expect(
+        authService.validateResetToken(
+          signedToken('email_verification', { sub: 'user-1' }),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(userService.findByResetToken).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException for an expired token', async () => {
@@ -876,7 +937,7 @@ describe('AuthService', () => {
       });
 
       await expect(
-        authService.validateResetToken('expired-token'),
+        authService.validateResetToken(signedToken('password_reset')),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
   });

@@ -2,9 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, MoreThan, Repository } from 'typeorm';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { RefreshToken } from './refresh-token.entity.js';
 import type { RefreshTokenRevocationReason } from './refresh-token.entity.js';
+import { SignedTokens } from './signed-tokens.js';
 
 const DEFAULT_REFRESH_TTL_DAYS = 30;
 
@@ -67,6 +68,7 @@ export class SessionService {
     @InjectRepository(RefreshToken)
     private readonly refreshTokens: Repository<RefreshToken>,
     private readonly config: ConfigService,
+    private readonly signed: SignedTokens,
   ) {}
 
   /** Days a refresh token stays valid. Absolute, not sliding: see `rotate`. */
@@ -87,12 +89,17 @@ export class SessionService {
     userId: string,
     client: SessionClient,
   ): Promise<IssuedSession> {
-    const token = randomBytes(32).toString('hex');
+    const familyId = randomUUID();
     const expiresAt = this.expiresAt();
+    const { token, hash } = this.signed.sign(
+      'refresh',
+      { sub: userId, sid: familyId },
+      expiresAt.getTime() - Date.now(),
+    );
     const record = this.refreshTokens.create({
       userId,
-      tokenHash: this.hash(token),
-      familyId: randomUUID(),
+      tokenHash: hash,
+      familyId,
       expiresAt,
       revokedAt: null,
       revokedReason: null,
@@ -117,12 +124,11 @@ export class SessionService {
     token: string,
     client: SessionClient,
   ): Promise<RotationResult> {
-    if (!token) {
+    if (!token || !this.signed.verify('refresh', token)) {
       return { ok: false, reason: 'unknown' };
     }
 
     const hash = this.hash(token);
-    const replacement = randomBytes(32).toString('hex');
     const now = new Date();
 
     return this.refreshTokens.manager.transaction(async (manager) => {
@@ -142,9 +148,15 @@ export class SessionService {
         return { ok: false, reason: 'expired' };
       }
 
+      const replacement = this.signed.sign(
+        'refresh',
+        { sub: record.userId, sid: record.familyId },
+        record.expiresAt.getTime() - now.getTime(),
+      );
+
       const next = repo.create({
         userId: record.userId,
-        tokenHash: this.hash(replacement),
+        tokenHash: replacement.hash,
         familyId: record.familyId,
         expiresAt: record.expiresAt,
         revokedAt: null,
@@ -197,7 +209,7 @@ export class SessionService {
 
       await repo.update({ id: record.id }, { replacedById: saved.id });
 
-      return { ok: true, token: replacement, record: saved };
+      return { ok: true, token: replacement.token, record: saved };
     });
   }
 

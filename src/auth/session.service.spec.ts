@@ -1,7 +1,9 @@
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { FindOperator } from 'typeorm';
 import { SessionService } from './session.service.js';
+import { SignedTokens } from './signed-tokens.js';
 import type { RefreshToken } from './refresh-token.entity.js';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -56,7 +58,11 @@ describe('SessionService', () => {
     });
 
     config = { get: jest.fn((_key: string, fallback?: string) => fallback) };
-    service = new SessionService(repo as never, config as unknown as ConfigService);
+    service = new SessionService(
+      repo as never,
+      config as unknown as ConfigService,
+      new SignedTokens(new JwtService({ secret: 'test-secret' })),
+    );
   });
 
   describe('ttlDays', () => {
@@ -81,7 +87,9 @@ describe('SessionService', () => {
 
       const written = repo.save.mock.calls[0][0] as Record<string, unknown>;
 
-      expect(issued.token).toMatch(/^[a-f0-9]{64}$/);
+      expect(issued.token).toMatch(
+        /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/,
+      );
       expect(written.tokenHash).not.toBe(issued.token);
       expect(written.tokenHash).toMatch(/^[a-f0-9]{64}$/);
       expect(written.userId).toBe('user-1');

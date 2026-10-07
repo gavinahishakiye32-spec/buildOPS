@@ -18,6 +18,14 @@ interface JwtPayload {
    * the token's lifetime.
    */
   sid?: string;
+  /**
+   * Present on every credential that is not an access token.
+   *
+   * The refresh token is signed with the same secret and carries a `sid`, so
+   * without this check it would be accepted straight from the cookie as a
+   * bearer credential. See `SignedTokens`.
+   */
+  purpose?: string;
 }
 
 @Injectable()
@@ -35,6 +43,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    // Only access tokens are bearer credentials. Anything else signed with this
+    // secret -- a refresh token, most notably -- is refused here rather than
+    // being honoured because it happens to carry a `sid`.
+    if (payload.purpose) {
+      throw new UnauthorizedException();
+    }
+
     // A token with no session claim predates sessions, or was minted by something
     // that should not have minted it. Either way it cannot be revoked, which is
     // the one property an access token here must have, so it is refused rather

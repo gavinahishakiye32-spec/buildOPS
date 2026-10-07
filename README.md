@@ -145,7 +145,11 @@ force before the money arrives — untested.
 ## Sessions
 
 An access token is a short-lived JWT; the refresh token lives in an httpOnly
-cookie. The design decisions, and the failure each one prevents:
+cookie. Every credential the API issues — access, refresh, email verification,
+password reset and invitation — is a JWT signed with `JWT_SECRET`, and each of
+the four non-access kinds carries a `purpose` claim so it cannot be replayed as
+another kind (nor as a bearer token, which is what the refresh cookie would
+otherwise be). The design decisions, and the failure each one prevents:
 
 - **The refresh token is never handed to JavaScript.** `POST /auth/login` returns
   only the access token and sets `rt` alongside a readable `csrf` cookie. A token

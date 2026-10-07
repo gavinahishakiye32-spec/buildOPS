@@ -13,6 +13,7 @@ import { UserService } from '../src/user/user.service.js';
 import { setupSwagger } from '../src/swagger.setup.js';
 import { SessionService } from '../src/auth/session.service.js';
 import { SessionCookies } from '../src/auth/session-cookies.js';
+import { SignedTokens } from '../src/auth/signed-tokens.js';
 import { RefreshToken } from '../src/auth/refresh-token.entity.js';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
@@ -433,6 +434,8 @@ describe('Swagger documentation (e2e)', () => {
         SessionService,
 
         SessionCookies,
+
+        SignedTokens,
 
         {
           provide: getRepositoryToken(RefreshToken),

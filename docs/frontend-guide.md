@@ -433,8 +433,11 @@ Consequences for the frontend:
    refresh it exactly like a login. Own an `/invitations/accept?token=…` route,
    keep the token out of analytics, and be ready for `409` when the link has
    already been used.
-4. Tokens are opaque 32-byte hex strings, valid once, and stored hashed. They
-   arrive in the query string — strip them from client-side analytics and logs.
+4. Tokens are signed JWTs — the same `JWT_SECRET` as the access token, with a
+   `purpose` claim that binds each one to its own flow — valid once, and stored
+   hashed. They arrive in the query string, are long, and are dot-separated
+   three-part strings rather than hex: strip them from client-side analytics and
+   logs, and do not assume a fixed length.
 5. **Outside production** the API returns the same links in JSON as well:
    `POST /auth/register` answers with `verificationToken` + `verificationLink`,
    `POST /auth/forgot-password` with `resetToken` + `resetLink` (only for an

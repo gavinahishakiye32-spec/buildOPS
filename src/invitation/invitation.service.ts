@@ -6,13 +6,13 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { createHash, randomBytes } from 'node:crypto';
 import { Repository } from 'typeorm';
 
 import { normalizeEmail } from '../common/email.js';
 import type { PermissionName } from '../common/permissions.js';
 import { AuthService } from '../auth/auth.service.js';
 import type { IssuedSession, SessionClient } from '../auth/session.service.js';
+import { SignedTokens, hashToken } from '../auth/signed-tokens.js';
 import {
   dispatchEmail,
   emailLink,
@@ -84,6 +84,7 @@ export class InvitationService {
     private readonly mailService: MailService,
     private readonly authService: AuthService,
     private readonly config: ConfigService,
+    private readonly signed: SignedTokens,
   ) {}
 
   // --- organization-scoped -------------------------------------------------
@@ -117,14 +118,14 @@ export class InvitationService {
 
     await this.replaceLapsedPending(organizationId, email);
 
-    const token = generateToken();
+    const signed = this.signed.sign('invitation', {}, INVITATION_TTL_MS);
     const invitation = await this.save(
       this.invitationRepo.create({
         organizationId,
         email,
         templateKey: template.key,
         roleName: template.name,
-        tokenHash: hashToken(token),
+        tokenHash: signed.hash,
         status: 'pending',
         expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
         invitedBy: actorUserId,
@@ -133,7 +134,7 @@ export class InvitationService {
     );
 
     const delivery = await dispatchEmail(this.config, () =>
-      this.mailService.sendInvitationEmail(invitation.email, token, {
+      this.mailService.sendInvitationEmail(invitation.email, signed.token, {
         organizationName: organization.name,
         roleName: invitation.roleName,
       }),
@@ -141,7 +142,7 @@ export class InvitationService {
 
     return {
       ...invitation.toResponse(),
-      ...this.invitationExtras(token, delivery),
+      ...this.invitationExtras(signed.token, delivery),
     };
   }
 
@@ -321,17 +322,24 @@ export class InvitationService {
   /**
    * The invitation behind a token, still able to be accepted.
    *
-   * Three refusals, in the order a caller meets them: no row behind the token is
-   * a 400 because the token itself is worthless, a row that has already been
-   * used or withdrawn is a 409 because the invitation is real but finished, and
-   * a pending row past `expires_at` is a 400 that says so plainly -- the one
-   * answer that tells the recipient to ask for a new link instead of retrying.
+   * The token has to be one this server signed as an invitation first, then
+   * match a row: a signature alone proves nothing about whether the invitation
+   * is still pending. Three refusals after that, in the order a caller meets
+   * them: no row behind the token is a 400 because the token itself is
+   * worthless, a row that has already been used or withdrawn is a 409 because
+   * the invitation is real but finished, and a pending row past `expires_at` is
+   * a 400 that says so plainly -- the one answer that tells the recipient to ask
+   * for a new link instead of retrying.
    */
   private async requirePending(token: string): Promise<OrganizationInvitation> {
     if (!token) {
       throw new BadRequestException(
         'Invitation token is required. Read it from the ?token= link sent by email.',
       );
+    }
+
+    if (!this.signed.verify('invitation', token)) {
+      throw new BadRequestException('Invalid or expired invitation token');
     }
 
     const invitation = await this.invitationRepo.findOne({
@@ -431,13 +439,4 @@ export class InvitationService {
       ...delivery,
     };
   }
-}
-
-/** A raw token: 64 hex characters, unreadable without the hash it was hashed from. */
-function generateToken(): string {
-  return randomBytes(32).toString('hex');
-}
-
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
 }

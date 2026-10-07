@@ -8,7 +8,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcryptjs';
-import { createHash, randomBytes } from 'node:crypto';
 import { UserService } from '../user/user.service.js';
 import { MailService } from '../mail/mail.service.js';
 import { buildEmailLink } from '../mail/mail.links.js';
@@ -24,6 +23,7 @@ import {
 } from '../common/enums.js';
 import { SessionService } from './session.service.js';
 import type { SessionClient } from './session.service.js';
+import { SignedTokens, hashToken } from './signed-tokens.js';
 
 const VERIFICATION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
@@ -52,6 +52,7 @@ export class AuthService {
     private readonly mailService: MailService,
     private readonly sessionService: SessionService,
     private readonly config: ConfigService,
+    private readonly signed: SignedTokens,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -320,8 +321,12 @@ export class AuthService {
       );
     }
 
+    if (!this.signed.verify('email_verification', token)) {
+      throw new BadRequestException('Invalid or expired verification token');
+    }
+
     const user = await this.userService.findByVerificationToken(
-      this.hashToken(token),
+      hashToken(token),
     );
     if (
       !user ||
@@ -353,17 +358,21 @@ export class AuthService {
       return { message };
     }
 
-    const token = this.generateToken();
+    const signed = this.signed.sign(
+      'password_reset',
+      { sub: user.id },
+      RESET_TOKEN_TTL_MS,
+    );
     await this.userService.setResetToken(
       user.id,
-      this.hashToken(token),
+      signed.hash,
       new Date(Date.now() + RESET_TOKEN_TTL_MS),
     );
     const delivery = await this.dispatchEmail(() =>
-      this.mailService.sendResetPasswordEmail(user.email, token),
+      this.mailService.sendResetPasswordEmail(user.email, signed.token),
     );
 
-    return { message, ...this.emailExtras('reset', token, delivery) };
+    return { message, ...this.emailExtras('reset', signed.token, delivery) };
   }
 
   /**
@@ -378,9 +387,11 @@ export class AuthService {
       );
     }
 
-    const user = await this.userService.findByResetToken(
-      this.hashToken(token),
-    );
+    if (!this.signed.verify('password_reset', token)) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const user = await this.userService.findByResetToken(hashToken(token));
     if (
       !user ||
       (user.resetTokenExpires && user.resetTokenExpires.getTime() < Date.now())
@@ -395,9 +406,11 @@ export class AuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto) {
-    const user = await this.userService.findByResetToken(
-      this.hashToken(dto.token),
-    );
+    if (!this.signed.verify('password_reset', dto.token)) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
+    const user = await this.userService.findByResetToken(hashToken(dto.token));
     if (
       !user ||
       (user.resetTokenExpires && user.resetTokenExpires.getTime() < Date.now())
@@ -419,17 +432,21 @@ export class AuthService {
   private async issueVerificationToken(
     user: User,
   ): Promise<{ token: string; delivery: EmailDelivery }> {
-    const token = this.generateToken();
+    const signed = this.signed.sign(
+      'email_verification',
+      { sub: user.id },
+      VERIFICATION_TOKEN_TTL_MS,
+    );
     await this.userService.setVerificationToken(
       user.id,
-      this.hashToken(token),
+      signed.hash,
       new Date(Date.now() + VERIFICATION_TOKEN_TTL_MS),
     );
     const delivery = await this.dispatchEmail(() =>
-      this.mailService.sendVerificationEmail(user.email, token),
+      this.mailService.sendVerificationEmail(user.email, signed.token),
     );
 
-    return { token, delivery };
+    return { token: signed.token, delivery };
   }
 
   /**
@@ -510,13 +527,5 @@ export class AuthService {
     sid: string,
   ): string {
     return this.jwtService.sign({ sub: userId, email, sid });
-  }
-
-  private generateToken(): string {
-    return randomBytes(32).toString('hex');
-  }
-
-  private hashToken(token: string): string {
-    return createHash('sha256').update(token).digest('hex');
   }
 }
