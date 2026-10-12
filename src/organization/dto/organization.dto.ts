@@ -1,6 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsIn, IsOptional, IsString, Length } from 'class-validator';
-import { ORGANIZATION_STATUSES } from '../../common/enums.js';
+import {
+  DEFAULT_ORGANIZATION_CURRENCY,
+  ORGANIZATION_CURRENCIES,
+  ORGANIZATION_STATUSES,
+} from '../../common/enums.js';
 
 export class CreateOrganizationDto {
   @ApiProperty({ example: 'Acme Delivery', description: 'Organization name' })
@@ -16,6 +20,24 @@ export class CreateOrganizationDto {
   @IsOptional()
   @IsIn(ORGANIZATION_STATUSES)
   status?: string;
+
+  /**
+   * Optional so an existing client keeps working unchanged: a caller that does
+   * not send it gets `DEFAULT_ORGANIZATION_CURRENCY`, which is the currency its
+   * amounts have always been read in.
+   */
+  @ApiPropertyOptional({
+    enum: ORGANIZATION_CURRENCIES,
+    default: DEFAULT_ORGANIZATION_CURRENCY,
+    example: 'RWF',
+    description:
+      'ISO 4217 code the amounts in this organization are read in. Asked once ' +
+      'when the organization is created and shared by every member. Choosing it ' +
+      'does not convert any amount already stored.',
+  })
+  @IsOptional()
+  @IsIn(ORGANIZATION_CURRENCIES)
+  currency?: string;
 }
 
 export class UpdateOrganizationDto {
@@ -43,6 +65,15 @@ export class OrganizationResponseDto {
 
   @ApiProperty({ enum: ORGANIZATION_STATUSES, example: 'active' })
   status: string;
+
+  @ApiProperty({
+    enum: ORGANIZATION_CURRENCIES,
+    example: 'RWF',
+    description:
+      'ISO 4217 code this organization reads its amounts in. Carried on every ' +
+      'response so a client can format money without a second request.',
+  })
+  currency: string;
 
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
   createdAt: Date;

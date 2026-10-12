@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { EMPTY_ROLLUP, type TaskRollup } from '../common/assignee.js';
 import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
 import { Badge } from '../badge/badge.entity.js';
@@ -28,6 +29,14 @@ export class Task {
   @ManyToOne(() => Badge, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'badge_id' })
   badge: Badge | null;
+
+  /**
+   * Deliberately no assignee.
+   *
+   * A task is the piece of work; the people doing it are named on the subtasks
+   * underneath it. An owner here would be a second answer to the same question,
+   * and the one that goes stale the moment a step is handed to somebody else.
+   */
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
@@ -74,7 +83,7 @@ export class Task {
   @Column({ name: 'deleted_by', type: 'uuid', nullable: true })
   deletedBy: string | null;
 
-  toResponse() {
+  toResponse(rollup: TaskRollup = EMPTY_ROLLUP) {
     return {
       id: this.id,
       projectId: this.projectId,
@@ -85,6 +94,7 @@ export class Task {
       priority: this.priority,
       status: this.status,
       dueDate: this.dueDate,
+      ...rollup,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };

@@ -35,7 +35,12 @@ export class InitialSchema1700000000000 implements MigrationInterface {
   name = 'InitialSchema1700000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
+    // This migration used to open with `CREATE EXTENSION IF NOT EXISTS
+    // "uuid-ossp"`, but nothing in it needs that extension: every primary key
+    // below defaults to `gen_random_uuid()`, which PostgreSQL has provided in
+    // core since 13. Keeping the statement meant the whole migration failed on
+    // any server without postgresql-contrib installed, even though it had no
+    // use for the extension. Dropped rather than made optional.
 
     await queryRunner.query(`
       CREATE TABLE "plans" (

@@ -25,7 +25,11 @@ const TAGS: [name: string, description: string][] = [
   ['projects', 'Projects within an organization'],
   ['badges', 'Badges within an organization'],
   ['tasks', 'Tasks within projects'],
-  ['subtasks', 'Subtasks under tasks'],
+  ['subtasks', 'Subtasks under tasks, and the work assigned to you'],
+  [
+    'notifications',
+    'Your own in-app notifications, and the unread count behind the bell',
+  ],
   ['time-entries', 'Time entries tracking work'],
   ['time-complexity', 'Time complexity configurations'],
   ['dashboard', 'Dashboard metrics and summaries'],

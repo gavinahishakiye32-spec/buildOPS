@@ -92,7 +92,9 @@ export class SubtaskController {
   @ApiOperation({
     summary: 'Create a subtask',
     description:
-      'Creates a subtask. When assignedTo is set, the user must be an active member of the team assigned to the task.',
+      'Creates a subtask. When assignedTo is set, the user must be an active ' +
+      'member of the organization the task belongs to. Omit it to leave the ' +
+      'subtask in the unassigned backlog.',
   })
   @ApiResponse({
     description: 'Subtask created',
@@ -108,6 +110,7 @@ export class SubtaskController {
     const subtask = await this.subtaskService.create(
       auth.organizationId,
       taskId,
+      auth.userId,
       dto,
     );
 
@@ -207,7 +210,8 @@ export class SubtaskController {
   @ApiOperation({
     summary: 'Update a subtask',
     description:
-      'Updates fields and reassigns the subtask to another team member.',
+      'Updates fields and reassigns the subtask. `assignedTo` accepts null, ' +
+      'which puts the subtask back on the unassigned backlog.',
   })
   @ApiResponse({
     description: 'The subtask as updated',
@@ -226,6 +230,7 @@ export class SubtaskController {
     const subtask = await this.subtaskService.update(
       auth.organizationId,
       subtaskId,
+      auth.userId,
       dto,
     );
 

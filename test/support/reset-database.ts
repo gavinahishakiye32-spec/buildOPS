@@ -38,6 +38,28 @@ const TABLES = [
 
 /** Empties every table the suites write to and resets their sequences. */
 export async function resetDatabase(dataSource: DataSource): Promise<void> {
+  /**
+   * A suite truncates every table, so it must never be pointed at the database
+   * the application runs against. The e2e setup file moves the suites onto
+   * `<DB_DATABASE>_test`, and this refuses anything else rather than trusting
+   * that file to have run — a developer who runs a spec directly, or an
+   * override of the config, should lose nothing.
+   *
+   * The escape hatch exists for the case where the test database genuinely has
+   * another name. It is deliberately awkward to type, because reaching for it
+   * should be a decision rather than a reflex.
+   */
+  const name = dataSource.options.database as string;
+
+  if (!name.endsWith("_test") && process.env.ALLOW_TRUNCATE !== 'i-understand-this-truncates') {
+    throw new Error(
+      `Refusing to truncate "${name}": it does not end in "_test". The e2e ` +
+        'suites wipe every table. Point DB_DATABASE at a test database, or set ' +
+        'ALLOW_TRUNCATE=i-understand-this-truncates if this one really is a ' +
+        'throwaway database.',
+    );
+  }
+
   await dataSource.query(
     `TRUNCATE TABLE ${TABLES.join(', ')} RESTART IDENTITY CASCADE`,
   );

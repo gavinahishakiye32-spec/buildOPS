@@ -37,6 +37,7 @@ import {
 import {
   MemberResponseDto,
   RoleMessageResponseDto,
+  MyMembershipResponseDto,
   RoleResponseDto,
   RoleTemplateDto,
 } from './dto/role-response.dto.js';
@@ -48,6 +49,49 @@ import { ROLE_TEMPLATES } from './role.service.js';
 @Controller('organizations/:organizationId')
 export class RoleController {
   constructor(private readonly roleService: RoleService) {}
+
+  /**
+   * The caller's own membership: their role and the permissions it carries.
+   *
+   * Deliberately carries **no** `@RequirePermissions`. That is the whole point:
+   * this is the one route a member has to be able to read even when their role
+   * grants nothing, because it is how a client learns what to show them. Every
+   * other route about roles needs `role.view`, and the member list needs
+   * `member.view`, so before this existed a `developer` had no way at all to
+   * ask what they were allowed to do.
+   *
+   * The permission to belong to the organization is still enforced — by the
+   * guard, which resolves the membership and answers 403 to somebody who is not
+   * a member. What is dropped is the check on *what* they may read, because the
+   * answer is their own.
+   *
+   * It answers from the membership the guard has already resolved for this
+   * request, so it is one query the guard was making anyway, and it is always
+   * current: a permission an administrator revoked a minute ago is simply not in
+   * the list.
+   */
+  @Get('me')
+  @OrganizationHeader()
+  @ApiOperation({
+    summary: 'The caller’s own membership',
+    description:
+      'The role the authenticated member acts with in this organization, and the permissions it carries. Readable by any member of the organization, including one whose role grants nothing, so a client can decide what to render without needing permission to ask.',
+  })
+  @ApiResponse({
+    description: 'The caller’s own role and permissions',
+    status: 200,
+    type: MyMembershipResponseDto,
+  })
+  @ApiErrors(403)
+  myMembership(@OrgAuth() auth: OrganizationAuthContext): MyMembershipResponseDto {
+    return {
+      userId: auth.userId,
+      organizationId: auth.organizationId,
+      roleId: auth.roleId as string,
+      roleName: auth.roleName as string,
+      permissions: auth.permissions,
+    };
+  }
 
   @Get('roles')
   @OrganizationHeader()

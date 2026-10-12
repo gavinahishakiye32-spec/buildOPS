@@ -1133,6 +1133,85 @@
         }
       }
     },
+    "/organizations/{organizationId}/me": {
+      "get": {
+        "description": "The role the authenticated member acts with in this organization, and the permissions it carries. Readable by any member of the organization, including one whose role grants nothing, so a client can decide what to render without needing permission to ask.",
+        "operationId": "RoleController_myMembership",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller’s own role and permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyMembershipResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The caller’s own membership",
+        "tags": [
+          "roles"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
     "/organizations/{organizationId}/roles": {
       "get": {
         "description": "Roles of the organization with their attached permissions. Rows without userId are role definitions not assigned to a member yet.",
@@ -7634,7 +7713,7 @@
         ]
       },
       "patch": {
-        "description": "Updates title, description, priority, status, due date, team assignment and badge classification.",
+        "description": "Updates title, description, priority, status, due date, team assignment, badge classification and owner. Fields left out are not touched.",
         "operationId": "TaskController_update",
         "parameters": [
           {
@@ -8028,7 +8107,7 @@
         ]
       },
       "post": {
-        "description": "Creates a subtask. When assignedTo is set, the user must be an active member of the team assigned to the task.",
+        "description": "Creates a subtask. When assignedTo is set, the user must be an active member of the organization the task belongs to. Omit it to leave the subtask in the unassigned backlog.",
         "operationId": "SubtaskController_createSubtask",
         "parameters": [
           {
@@ -8466,7 +8545,7 @@
         ]
       },
       "patch": {
-        "description": "Updates fields and reassigns the subtask to another team member.",
+        "description": "Updates fields and reassigns the subtask. `assignedTo` accepts null, which puts the subtask back on the unassigned backlog.",
         "operationId": "SubtaskController_updateSubtask",
         "parameters": [
           {
@@ -8728,6 +8807,608 @@
         "x-permissions": [
           "subtask.delete"
         ]
+      }
+    },
+    "/subtasks": {
+      "get": {
+        "description": "Your work across every project in the active organization, each row carrying the task and project it belongs to -- a subtask read out of context (\"reset the password\") cannot be judged or prioritised on its own.\n\nThis route is scoped to the caller: it always answers with the subtasks assigned to *them*, whatever role they hold. Narrow it further with `status`, `projectId` and `taskId`.\n\nAsking for `assigneeId` or for the unassigned backlog is refused with 403 rather than quietly answered with your own work: a caller that asked \"what has Rex got\" and got their own queue back would read the empty result as \"Rex has nothing\", which is a different and wrong conclusion. Ordered by due date, soonest first, with undated work last.",
+        "operationId": "SubtaskFeedController_feed",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "todo",
+                "in_progress",
+                "done",
+                "cancelled"
+              ]
+            }
+          },
+          {
+            "name": "assigneeId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to work assigned to this user.",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignment",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to work that has an assignee, or to the unassigned backlog.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "assigned",
+                "unassigned"
+              ]
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of the work assigned to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubtaskFeedPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the subtasks assigned to you",
+        "tags": [
+          "subtasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.view"
+        ]
+      }
+    },
+    "/assignees": {
+      "get": {
+        "description": "Active members of the organization, as the assignment picker needs them: id, name and email, and nothing about their role or permissions. Requires `subtask.assign` rather than `member.view`, so handing work to somebody does not also make the caller an administrator of the member directory.",
+        "operationId": "SubtaskFeedController_assignees",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignable members, by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AssignableMemberDto"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List the people work can be assigned to",
+        "tags": [
+          "subtasks"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "subtask.assign"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "description": "Your notifications in this organization, newest first. Only ever your own: the recipient is the authenticated caller, so there is no request that reaches another member's.",
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List your notifications",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "description": "Drives the badge on the bell. Separate from the list so the header does not have to page the whole thing to render one number.",
+        "operationId": "NotificationController_unread",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "How many notifications you have not read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "description": "Clears the badge. Only unread rows are touched, so the timestamp on something read last month is not rewritten.",
+        "operationId": "NotificationController_readAll",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many were marked read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark every notification read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "post": {
+        "description": "Scoped to the caller as well as the id, so a notification id from somebody else answers 404 rather than clearing their badge.",
+        "operationId": "NotificationController_readOne",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The notification is now read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark one notification read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
       }
     },
     "/time-entries": {
@@ -11922,7 +12603,11 @@
     },
     {
       "name": "subtasks",
-      "description": "Subtasks under tasks"
+      "description": "Subtasks under tasks, and the work assigned to you"
+    },
+    {
+      "name": "notifications",
+      "description": "Your own in-app notifications, and the unread count behind the bell"
     },
     {
       "name": "time-entries",
@@ -12611,6 +13296,46 @@
           "message"
         ]
       },
+      "MyMembershipResponseDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roleId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "roleName": {
+            "type": "string",
+            "example": "Developer"
+          },
+          "permissions": {
+            "example": [
+              "task.view",
+              "task.create",
+              "time_entry.create"
+            ],
+            "description": "Exactly what this member may do in this organization right now. Read live, so a permission an administrator has since revoked is absent from this list.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "userId",
+          "organizationId",
+          "roleId",
+          "roleName",
+          "permissions"
+        ]
+      },
       "PermissionResponseDto": {
         "type": "object",
         "properties": {
@@ -13036,6 +13761,34 @@
             ],
             "default": "active",
             "description": "Lifecycle status"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "RWF",
+              "KES",
+              "UGX",
+              "TZS",
+              "ZAR",
+              "NGN",
+              "GHS",
+              "EGP",
+              "ETB",
+              "ZMW",
+              "CDF",
+              "INR",
+              "AED",
+              "CAD",
+              "AUD",
+              "JPY",
+              "CNY"
+            ],
+            "default": "USD",
+            "example": "RWF",
+            "description": "ISO 4217 code the amounts in this organization are read in. Asked once when the organization is created and shared by every member. Choosing it does not convert any amount already stored."
           }
         },
         "required": [
@@ -13066,6 +13819,33 @@
             ],
             "example": "active"
           },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "USD",
+              "EUR",
+              "GBP",
+              "RWF",
+              "KES",
+              "UGX",
+              "TZS",
+              "ZAR",
+              "NGN",
+              "GHS",
+              "EGP",
+              "ETB",
+              "ZMW",
+              "CDF",
+              "INR",
+              "AED",
+              "CAD",
+              "AUD",
+              "JPY",
+              "CNY"
+            ],
+            "example": "RWF",
+            "description": "ISO 4217 code this organization reads its amounts in. Carried on every response so a client can format money without a second request."
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string",
@@ -13077,6 +13857,7 @@
           "tenantId",
           "name",
           "status",
+          "currency",
           "createdAt"
         ]
       },
@@ -13154,7 +13935,7 @@
           "email": {
             "type": "string",
             "example": "dev@example.com",
-            "description": "Address the invitation is sent to. Compared in normalized form, so `Dev@Example.com` and `dev@example.com` are the same invitation."
+            "description": "Address the invitation is sent to. Compared in normalized form, so `Dev@Example.com` and `dev@example.com` is the same invitation."
           },
           "templateKey": {
             "type": "string",
@@ -13166,7 +13947,12 @@
               "tester",
               "viewer"
             ],
-            "description": "Default role template the invitee receives when they accept. Defaults to \"viewer\", matching POST /organizations/:organizationId/members."
+            "description": "Fallback role template, used when no `roleId` is given or when the named role is gone by the time the invitation is accepted. Defaults to \"viewer\", matching POST /organizations/:organizationId/members."
+          },
+          "roleId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The role the invitee receives on acceptance: a `roles` row of this organization that nobody holds yet. Naming it here is what lets a role an administrator built travel with the invitation, instead of the invitee receiving whichever built-in template shares its name. Must belong to this organization and must be unassigned."
           }
         },
         "required": [
@@ -14311,6 +15097,23 @@
           "title"
         ]
       },
+      "AssigneeSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "name": {
+            "type": "object",
+            "example": "Alex Morgan",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
       "TaskResponseDto": {
         "type": "object",
         "properties": {
@@ -14366,6 +15169,23 @@
             "example": "2026-11-01",
             "nullable": true
           },
+          "subtaskTotal": {
+            "type": "number",
+            "example": 4,
+            "description": "Subtasks under this task, excluding deleted ones."
+          },
+          "subtaskDone": {
+            "type": "number",
+            "example": 2,
+            "description": "How many of those subtasks are `done`."
+          },
+          "assignees": {
+            "description": "Distinct people with a subtask assigned on this task. This is the task's whole team -- the people actually doing the work -- not an owner of the task itself, which is deliberately not a thing here.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssigneeSummaryDto"
+            }
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string",
@@ -14383,6 +15203,9 @@
           "title",
           "priority",
           "status",
+          "subtaskTotal",
+          "subtaskDone",
+          "assignees",
           "createdAt",
           "updatedAt"
         ]
@@ -14506,6 +15329,16 @@
             "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
             "nullable": true
           },
+          "assignee": {
+            "nullable": true,
+            "description": "The assignee, resolved. Null when unassigned, or when the read did not join the relation -- `assignedTo` is the durable fact.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssigneeSummaryDto"
+              }
+            ]
+          },
           "title": {
             "type": "string",
             "example": "Write invoice templates"
@@ -14602,7 +15435,7 @@
           "assignedTo": {
             "type": "string",
             "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
-            "description": "Assignee; must be an active member of the team assigned to the task (spec §11)"
+            "description": "Who does this. Must be an active member of the organization the parent task belongs to. Omit to leave it in the unassigned backlog."
           },
           "status": {
             "type": "string",
@@ -14638,7 +15471,7 @@
             "type": "object",
             "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
             "nullable": true,
-            "description": "New assignee; must be an active member of the task team"
+            "description": "New assignee; must be an active member of the organization. Null puts the subtask back on the unassigned backlog."
           },
           "status": {
             "type": "string",
@@ -14671,6 +15504,368 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "FeedTaskDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"
+          },
+          "title": {
+            "type": "string",
+            "example": "Implement invoicing endpoint"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "in_review",
+              "done",
+              "cancelled"
+            ],
+            "example": "in_progress"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "example": "medium"
+          },
+          "dueDate": {
+            "type": "object",
+            "example": "2026-11-01",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "priority"
+        ]
+      },
+      "FeedProjectDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33"
+          },
+          "name": {
+            "type": "string",
+            "example": "FinTech Cloud Migration"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "AssignedSubtaskResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "taskId": {
+            "type": "string",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6"
+          },
+          "assignedTo": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "nullable": true
+          },
+          "assignee": {
+            "nullable": true,
+            "description": "The assignee, resolved. Null when unassigned, or when the read did not join the relation -- `assignedTo` is the durable fact.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AssigneeSummaryDto"
+              }
+            ]
+          },
+          "title": {
+            "type": "string",
+            "example": "Write invoice templates"
+          },
+          "description": {
+            "type": "object",
+            "example": "Cover all invoice templates."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "in_progress",
+              "done",
+              "cancelled"
+            ],
+            "example": "todo"
+          },
+          "dueDate": {
+            "type": "object",
+            "example": "2026-10-20",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-30T10:00:00.000Z"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-30T10:00:00.000Z"
+          },
+          "task": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeedTaskDto"
+              }
+            ]
+          },
+          "project": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeedProjectDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "taskId",
+          "title",
+          "status",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "SubtaskFeedPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Records of the current page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssignedSubtaskResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Total matching records"
+          },
+          "page": {
+            "type": "number",
+            "example": 1,
+            "description": "Current page (1-based)"
+          },
+          "limit": {
+            "type": "number",
+            "example": 20,
+            "description": "Items per page"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3,
+            "description": "Total number of pages"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
+        ]
+      },
+      "AssignableMemberDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "name": {
+            "type": "object",
+            "example": "Alex Morgan",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "example": "alex.morgan@example.com"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ]
+      },
+      "NotificationActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "name": {
+            "type": "object",
+            "example": "Ada Login",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subtask_assigned",
+              "subtask_reassigned",
+              "subtask_completed",
+              "task_assigned"
+            ],
+            "example": "subtask_assigned"
+          },
+          "title": {
+            "type": "string",
+            "example": "Ada Login assigned you \"Build the login form\""
+          },
+          "body": {
+            "type": "object",
+            "example": "A subtask of \"Authentication\" in Acme Delivery.",
+            "nullable": true
+          },
+          "taskId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "nullable": true,
+            "description": "The task, for a deep link. Null once that task is deleted."
+          },
+          "subtaskId": {
+            "type": "object",
+            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
+            "nullable": true,
+            "description": "The subtask, for a deep link."
+          },
+          "actor": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationActorDto"
+              }
+            ]
+          },
+          "readAt": {
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "description": "When it was read. Null is what the unread badge counts."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-30T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "createdAt"
+        ]
+      },
+      "NotificationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Records of the current page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Total matching records"
+          },
+          "page": {
+            "type": "number",
+            "example": 1,
+            "description": "Current page (1-based)"
+          },
+          "limit": {
+            "type": "number",
+            "example": 20,
+            "description": "Items per page"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3,
+            "description": "Total number of pages"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
+        ]
+      },
+      "UnreadCountDto": {
+        "type": "object",
+        "properties": {
+          "unread": {
+            "type": "number",
+            "example": 3,
+            "description": "Notifications the caller has not read."
+          }
+        },
+        "required": [
+          "unread"
+        ]
+      },
+      "ReadResultDto": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "number",
+            "example": 1
+          },
+          "read": {
+            "type": "boolean",
+            "example": true,
+            "description": "Present on the single-notification route; whether it was the caller’s."
+          }
+        },
+        "required": [
+          "updated"
         ]
       },
       "CreateTimeEntryDto": {

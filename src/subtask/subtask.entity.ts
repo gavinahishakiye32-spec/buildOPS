@@ -1,4 +1,5 @@
 import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { assigneeSummary } from '../common/assignee.js';
 import { Task } from '../task/task.entity.js';
 import { User } from '../user/user.entity.js';
 
@@ -14,7 +15,13 @@ export class Subtask {
   @JoinColumn({ name: 'task_id' })
   task: Task;
 
-  /** Assigned user — must be an active TeamMember of the parent task's team. */
+  /**
+   * Assigned user, who must be an active member of the organization.
+   *
+   * Null means unassigned, which is a normal state: a subtask can be written
+   * before anyone picks it up, and a task nobody has claimed yet is exactly the
+   * backlog a board is for.
+   */
   @Column({ name: 'assigned_to', type: 'uuid', nullable: true })
   assignedTo: string | null;
 
@@ -69,6 +76,11 @@ export class Subtask {
       id: this.id,
       taskId: this.taskId,
       assignedTo: this.assignedTo,
+      /**
+       * The person on the subtask, resolved from `assigned_to`. Null when
+       * unassigned, and also when the caller did not join the relation.
+       */
+      assignee: assigneeSummary(this.assignee),
       title: this.title,
       description: this.description,
       status: this.status,

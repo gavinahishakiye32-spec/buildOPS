@@ -59,6 +59,7 @@ CREATE TABLE organizations (
     tenant_id  UUID,
     name       VARCHAR(255) NOT NULL,
     status     VARCHAR(50),
+    currency   VARCHAR(3) NOT NULL DEFAULT 'USD',
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
@@ -260,5 +261,15 @@ CREATE INDEX idx_time_entries_subtask_id      ON time_entries(subtask_id);
 CREATE INDEX idx_time_entries_user_id         ON time_entries(user_id);
 CREATE INDEX idx_time_complexity_task_id      ON time_complexity(task_id);
 CREATE INDEX idx_time_complexity_subtask_id   ON time_complexity(subtask_id);
+
+-- Built-in plan catalogue. Mirrors DEFAULT_PLANS in src/plan/plan.service.ts so
+-- a freshly created database can serve GET /plans immediately, instead of
+-- waiting for the seed that only runs on backend boot. PlanService.seedDefaults()
+-- is idempotent (it no-ops when the table is non-empty), so booting the API on
+-- top of this is safe.
+INSERT INTO plans (name, description, max_users, max_projects, max_storage_gb, max_organizations, price) VALUES
+    ('Starter',  'Single workspace for a small team getting started with delivery tracking.', 5, 3, 5, 1, 19.00),
+    ('Growth',   'Multiple workspaces for growing delivery teams.', 25, 25, 50, 3, 79.00),
+    ('Business', 'Scale plan with generous limits across every organization.', 100, 200, 500, 10, 299.00);
 
 COMMIT;

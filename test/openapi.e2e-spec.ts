@@ -75,6 +75,9 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['POST', '/organizations', ['201']],
   ['GET', '/organizations', ['200']],
   ['GET', '/organizations/{organizationId}', ['200']],
+  // The caller's own membership -- the one route any member can read, with no
+  // permission check of its own.
+  ['GET', '/organizations/{organizationId}/me', ['200']],
   ['PATCH', '/organizations/{organizationId}', ['200']],
   ['DELETE', '/organizations/{organizationId}', ['200']],
   // Roles and the members that hold them.
@@ -165,6 +168,18 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['DELETE', '/tasks/{taskId}', ['200']],
   ['GET', '/tasks/trash', ['200']],
   ['POST', '/tasks/{taskId}/restore', ['201']],
+  // Assignment: the organization-wide work feed, and the people it can be handed
+  // to. `GET /subtasks` is not nested under a task on purpose -- it answers
+  // "what is assigned to me" across every project, which a nested route cannot.
+  ['GET', '/subtasks', ['200']],
+  ['GET', '/assignees', ['200']],
+  // In-app notifications. No permission of their own: a notification is
+  // addressed to its recipient, so `subtask.view` would only be the wrong
+  // permission for somebody who reads their own work.
+  ['GET', '/notifications', ['200']],
+  ['GET', '/notifications/unread-count', ['200']],
+  ['POST', '/notifications/read-all', ['200']],
+  ['POST', '/notifications/{notificationId}/read', ['200']],
   ['POST', '/tasks/{taskId}/subtasks', ['201']],
   ['GET', '/tasks/{taskId}/subtasks', ['200']],
   ['GET', '/tasks/{taskId}/subtasks/{subtaskId}', ['200']],

@@ -1,5 +1,9 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": ".",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
@@ -11,11 +15,16 @@
       }
     ]
   },
-  "extensionsToTreatAsEsm": [".ts"],
+  "extensionsToTreatAsEsm": [
+    ".ts"
+  ],
   "moduleNameMapper": {
     "^(\\.{1,2}/.*)\\.js$": "$1"
   },
   "testEnvironment": "node",
   "maxWorkers": 1,
-  "setupFiles": ["<rootDir>/setup/throttler-first.mjs"]
+  "setupFiles": [
+    "<rootDir>/setup/throttler-first.mjs",
+    "<rootDir>/setup/test-database.mjs"
+  ]
 }

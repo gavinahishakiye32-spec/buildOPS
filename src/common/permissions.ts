@@ -137,6 +137,12 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('project'),
       ...viewOnly('badge'),
       ...viewOnly('time_complexity'),
+      // Reading has to come before writing. `task.create` without
+      // `task.view` described a role that could add work to a board it was
+      // then forbidden to open -- and, with assignment in play, one that could
+      // hand out work while being unable to see who had taken it.
+      ...viewOnly('task'),
+      ...viewOnly('subtask'),
       PERMISSIONS.TASK_CREATE,
       PERMISSIONS.TASK_UPDATE,
       PERMISSIONS.SUBTASK_CREATE,
@@ -159,6 +165,10 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('project'),
       ...viewOnly('badge'),
       ...viewOnly('time_complexity'),
+      // The same reasoning as `developer`: a role that updates tasks and
+      // subtasks has to be able to read the ones it is reviewing.
+      ...viewOnly('task'),
+      ...viewOnly('subtask'),
       PERMISSIONS.TASK_UPDATE,
       PERMISSIONS.SUBTASK_CREATE,
       PERMISSIONS.SUBTASK_UPDATE,

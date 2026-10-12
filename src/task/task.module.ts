@@ -16,7 +16,8 @@ import { AuthModule } from '../auth/auth.module.js';
   imports: [
     AuthModule,
     AuthorizationModule,
-    // Subtask and TimeEntry are here for the cascading delete, not for reads.
+    // Subtask and TimeEntry are here for the cascading delete and the subtask
+    // rollup, not for reads.
     TypeOrmModule.forFeature([Task, Project, Team, Badge, Subtask, TimeEntry]),
     TeamModule,
   ],

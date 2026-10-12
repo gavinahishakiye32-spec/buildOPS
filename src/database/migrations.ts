@@ -6,6 +6,11 @@ import { SoftDeletes1700000000003 } from './migrations/1700000000003-soft-delete
 import { Settings1700000000004 } from './migrations/1700000000004-settings.js';
 import { AccountDeletion1700000000005 } from './migrations/1700000000005-account-deletion.js';
 import { MemberInvitations1700000000006 } from './migrations/1700000000006-member-invitations.js';
+import { InvitationRoleId1700000000007 } from './migrations/1700000000007-invitation-role-id.js';
+import { OrganizationCurrency1700000000008 } from './migrations/1700000000008-organization-currency.js';
+import { TaskAssignment1700000000009 } from './migrations/1700000000009-task-assignment.js';
+import { DropTaskAssignee1700000000010 } from './migrations/1700000000010-drop-task-assignee.js';
+import { Notifications1700000000011 } from './migrations/1700000000011-notifications.js';
 
 /**
  * The ordered migration list. TypeORM records what has run in the `migrations`
@@ -21,4 +26,9 @@ export const MIGRATIONS: (new () => MigrationInterface)[] = [
   Settings1700000000004,
   AccountDeletion1700000000005,
   MemberInvitations1700000000006,
+  InvitationRoleId1700000000007,
+  OrganizationCurrency1700000000008,
+  TaskAssignment1700000000009,
+  DropTaskAssignee1700000000010,
+  Notifications1700000000011,
 ];

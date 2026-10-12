@@ -47,6 +47,19 @@ export interface MemberSummary {
   status: string;
 }
 
+/**
+ * A member as the assignment picker sees them: enough to render a row in a
+ * dropdown, nothing that the member directory guards.
+ *
+ * See {@link RoleService.listAssignableMembers} for why this is not
+ * `MemberSummary`.
+ */
+export interface AssignableMember {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
 /** A role row that is assigned to somebody, with that somebody loaded. */
 const hasMember = (role: Role): boolean =>
   role.userId !== null && role.user !== null;
@@ -135,6 +148,72 @@ export class RoleService extends MembershipResolver {
     });
 
     return roles.filter(hasMember).map(describeMember);
+  }
+
+  /**
+   * The people a piece of work can be assigned to.
+   *
+   * The assignment picker, not the members administration screen, so it carries
+   * a name and nothing else -- no role, no permission list, no address. Those
+   * are on `listMembers`, which is gated behind `member.view`; this one is
+   * gated behind the permission that actually authorises handing work to
+   * somebody, so a developer with `subtask.assign` can fill in an assignee
+   * without also being made an administrator of the member directory.
+   *
+   * Only `active` memberships. A suspended member has lost access to the
+   * organization (`PermissionsGuard` will not resolve them), so offering them as
+   * an assignee would produce work assigned to someone who cannot open it.
+   *
+   * Soft-deleted users are excluded for the same reason: the account behind the
+   * membership is gone, so the row is stale rather than a person.
+   */
+  async listAssignableMembers(organizationId: string): Promise<AssignableMember[]> {
+    const roles = await this.roleRepo
+      .createQueryBuilder('role')
+      .innerJoinAndSelect('role.user', 'user')
+      .where('role.organization_id = :organizationId', { organizationId })
+      .andWhere('role.status = :status', { status: 'active' })
+      .andWhere('role.user_id IS NOT NULL')
+      // The soft-delete filter TypeORM adds to a joined alias is the reason
+      // this is an explicit condition rather than relying on `relations`.
+      .andWhere('user.deleted_at IS NULL')
+      .orderBy('LOWER(COALESCE(user.name, user.email))', 'ASC')
+      .getMany();
+
+    return roles
+      .filter(hasMember)
+      .map((role) => ({
+        id: role.userId as string,
+        name: role.user?.name ?? null,
+        email: role.user?.email ?? '',
+      }));
+  }
+
+  /**
+   * Proves a user may be assigned work in this organization.
+   *
+   * The check assignment routes run before writing `assignee_id` or
+   * `assigned_to`. It is membership, not team membership: work in this product
+   * is handed to a person in the organization, and which team happens to be on
+   * the parent task is a separate question from who can be given a piece of it.
+   *
+   * Refuses with a 400 rather than a 404 because the caller sent a real id that
+   * names somebody who cannot be assigned -- telling them "not found" would send
+   * them looking for a typo that is not there.
+   */
+  async assertAssignableMember(
+    organizationId: string,
+    userId: string,
+  ): Promise<void> {
+    const role = await this.roleRepo.findOne({
+      where: { organizationId, userId, status: 'active' },
+    });
+
+    if (!role) {
+      throw new BadRequestException(
+        'The assignee must be an active member of this organization',
+      );
+    }
   }
 
   /**
@@ -294,6 +373,26 @@ export class RoleService extends MembershipResolver {
     }
 
     return role;
+  }
+
+  /**
+   * The role, or `null` when it does not belong to this organization.
+   *
+   * `findRole` throws, which is right for a request that named a role and
+   * expects one. The invitation flow is the other case: it holds a role id that
+   * may be days old, and the role may have been deleted since. There the
+   * question is "can I still grant this?", and "no" is an answer that falls
+   * back to the template rather than a 404 sent to somebody who only clicked a
+   * link in an email.
+   */
+  async findRoleOrNull(
+    organizationId: string,
+    roleId: string,
+  ): Promise<Role | null> {
+    return this.repos().roles.findOne({
+      where: { id: roleId, organizationId },
+      relations: { permissions: true, user: true },
+    });
   }
 
   async createRole(organizationId: string, dto: CreateRoleDto): Promise<Role> {

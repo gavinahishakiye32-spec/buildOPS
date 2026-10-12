@@ -68,8 +68,17 @@ export class TaskController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Body() dto: CreateTaskDto,
   ): Promise<TaskResponseDto> {
-    const task = await this.taskService.create(auth.organizationId, dto);
-    return task.toResponse();
+    const created = await this.taskService.create(auth.organizationId, dto);
+
+    // Re-read rather than answering from the insert: the response has to
+    // describe the task as stored, including the owner resolved and the subtask
+    // totals the detail view shows, and `create` only has the row it just wrote.
+    const detail = await this.taskService.findOneDetailed(
+      auth.organizationId,
+      created.id,
+    );
+
+    return detail.task.toResponse(detail.rollup);
   }
 
   @Get()
@@ -91,7 +100,10 @@ export class TaskController {
     @Query() query: TaskQueryDto,
   ): Promise<Paginated<TaskResponseDto>> {
     const page = await this.taskService.list(auth.organizationId, query);
-    return { ...page, items: page.items.map((task) => task.toResponse()) };
+    return {
+      ...page,
+      items: page.items.map((item) => item.task.toResponse(item.rollup)),
+    };
   }
 
   /**
@@ -164,8 +176,12 @@ export class TaskController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('taskId', ParseUUIDPipe) taskId: string,
   ): Promise<TaskResponseDto> {
-    const task = await this.taskService.findOne(auth.organizationId, taskId);
-    return task.toResponse();
+    const detail = await this.taskService.findOneDetailed(
+      auth.organizationId,
+      taskId,
+    );
+
+    return detail.task.toResponse(detail.rollup);
   }
 
   @Patch(':taskId')
@@ -174,7 +190,8 @@ export class TaskController {
   @ApiOperation({
     summary: 'Update a task',
     description:
-      'Updates title, description, priority, status, due date, team assignment and badge classification.',
+      'Updates title, description, priority, status, due date, team assignment, ' +
+      'badge classification and owner. Fields left out are not touched.',
   })
   @ApiResponse({
     description: 'The task as updated',
@@ -187,12 +204,18 @@ export class TaskController {
     @Param('taskId', ParseUUIDPipe) taskId: string,
     @Body() dto: UpdateTaskDto,
   ): Promise<TaskResponseDto> {
-    const task = await this.taskService.update(
+    await this.taskService.update(
       auth.organizationId,
       taskId,
       dto,
     );
-    return task.toResponse();
+
+    const detail = await this.taskService.findOneDetailed(
+      auth.organizationId,
+      taskId,
+    );
+
+    return detail.task.toResponse(detail.rollup);
   }
 
   @Delete(':taskId')

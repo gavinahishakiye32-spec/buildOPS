@@ -42,3 +42,24 @@ export function getSecret(
 
   return developmentDefault;
 }
+
+/**
+ * Whether request throttling is on.
+ *
+ * Off by default, and the default is the point: during development every
+ * person, script and test run on one machine shares a single key, because the
+ * limiter tracks the request IP. A dashboard that loads six resources on mount
+ * will trip a limit written for a public API, and the 429 that comes back is
+ * indistinguishable from a real one — it reads as "the app is broken" and costs
+ * an afternoon to trace to a bucket that was never meant to apply to localhost.
+ *
+ * The limiter is kept, not deleted. It is the only thing standing between a
+ * deployed instance and credential stuffing against `/auth/login`, and between
+ * `/auth/forgot-password` and mailing every customer on demand. Turning it on
+ * for a real deployment is one variable, no code change:
+ *
+ *   THROTTLE_ENABLED=true
+ */
+export function isThrottlingEnabled(config: ConfigService): boolean {
+  return config.get<string>('THROTTLE_ENABLED')?.trim() === 'true';
+}

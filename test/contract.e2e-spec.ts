@@ -40,8 +40,14 @@ jest.setTimeout(60000);
  */
 const previousThrottleLimit = process.env.THROTTLE_LIMIT;
 const previousThrottleTtl = process.env.THROTTLE_TTL;
+const previousThrottleEnabled = process.env.THROTTLE_ENABLED;
 process.env.THROTTLE_LIMIT = '2';
 process.env.THROTTLE_TTL = '60000';
+// The limiter is off by default outside development, and this suite exists to
+// prove the documented 429 -- so it turns it on for its own instance. Without
+// it the two rate-limit assertions below would pass vacuously, which is worse
+// than failing: the contract would claim a response the code cannot produce.
+process.env.THROTTLE_ENABLED = 'true';
 
 const api = (path: string): string => `/${API_PREFIX}${path}`;
 
@@ -410,6 +416,7 @@ describe('published contract vs runtime (e2e)', () => {
     // expect instead of leaving `THROTTLE_LIMIT=2` behind.
     process.env.THROTTLE_LIMIT = previousThrottleLimit;
     process.env.THROTTLE_TTL = previousThrottleTtl;
+    process.env.THROTTLE_ENABLED = previousThrottleEnabled;
   });
 
   describe('auth', () => {
@@ -1233,6 +1240,9 @@ describe('published contract vs runtime (e2e)', () => {
         tenantId: expect.any(String),
         name: 'Contract Co',
         status: 'active',
+        // Organizations are denominated in a currency, chosen at creation and
+        // defaulting to USD when the caller does not name one.
+        currency: 'USD',
         createdAt: expect.any(String),
       });
       organizationId = created.body.id;
@@ -1387,6 +1397,37 @@ describe('published contract vs runtime (e2e)', () => {
       expect(unknown.body.error).toBe('Forbidden');
       expect(unknown.body.message).toBe(
         'You do not have access to this organization',
+      );
+    });
+
+    it('GET /organizations/{organizationId}/me returns 200, 401 and 403', async () => {
+      // `/me` deliberately carries no permission check of its own: it is how a
+      // member learns the permissions they act with, so requiring one would make
+      // the answer depend on the thing being asked. It is still scoped to a
+      // membership -- an outsider resolves none and is refused.
+      const self = await probe(
+        'get',
+        `/organizations/${organizationId}/me`,
+        (req) => asOwner(req),
+        '200',
+        'owner reads own membership',
+      );
+      expect(self.body.userId).toEqual(expect.any(String));
+      expect(Array.isArray(self.body.permissions)).toBe(true);
+
+      await probe(
+        'get',
+        `/organizations/${organizationId}/me`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+      await probe(
+        'get',
+        `/organizations/${organizationId}/me`,
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
       );
     });
 
@@ -3767,6 +3808,47 @@ describe('published contract vs runtime (e2e)', () => {
       );
     });
 
+    it('GET /subtasks returns 200, 401 and 403', async () => {
+      const feed = await probe('get', '/subtasks', (req) => asOwner(req), '200');
+      expect(Array.isArray(feed.body.items)).toBe(true);
+
+      await probe('get', '/subtasks', (req) => req, '401', 'no token');
+      await probe(
+        'get',
+        '/subtasks',
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+    });
+
+    it('GET /assignees returns 200, 401 and 403', async () => {
+      const assignees = await probe(
+        'get',
+        '/assignees',
+        (req) => asOwner(req),
+        '200',
+      );
+      expect(Array.isArray(assignees.body)).toBe(true);
+      // The picker needs a name and an address and nothing about the member's
+      // role, so the route is gated on `subtask.assign` rather than on
+      // `member.view`.
+      expect(Object.keys(assignees.body[0]).sort()).toEqual([
+        'email',
+        'id',
+        'name',
+      ]);
+
+      await probe('get', '/assignees', (req) => req, '401', 'no token');
+      await probe(
+        'get',
+        '/assignees',
+        (req) => asOutsider(req),
+        '403',
+        'not a member',
+      );
+    });
+
     it('POST /tasks/{taskId}/subtasks returns 400, 401, 403, 404 and 201', async () => {
       await probe(
         'post',
@@ -3789,6 +3871,10 @@ describe('published contract vs runtime (e2e)', () => {
         '400',
         'empty title',
       );
+      // An assignee has to be an active member of the *organization*. It used
+      // to have to be a member of the task's team as well, which meant a task
+      // with no team could not be assigned to anyone at all -- so the refusal
+      // below is about membership, not about which team the task is on.
       await probe(
         'post',
         `/tasks/${teamlessTaskId}/subtasks`,
@@ -3797,8 +3883,8 @@ describe('published contract vs runtime (e2e)', () => {
             title: 'Write the schema',
             assignedTo: memberUserId,
           }),
-        '400',
-        'task has no team',
+        '201',
+        'task has no team, assignee is still a member',
       );
       await probe(
         'post',
@@ -5583,6 +5669,126 @@ describe('published contract vs runtime (e2e)', () => {
       }
 
       expect(neverLimited).toEqual([]);
+    });
+  });
+
+  describe('notifications', () => {
+    // These routes carry no permission of their own -- a notification is
+    // addressed to its recipient and to nobody else -- so the only errors they
+    // can produce are an absent token and a membership that does not resolve.
+    //
+    // Everything here is set up inside the describe rather than borrowed from
+    // the suite's shared fixtures. This block runs last, and by then the shared
+    // `ownerToken` has been ended by the password-change probe above and the
+    // shared member has been removed from the organization by the members
+    // probes. Probing against another test's leftovers would make these results
+    // depend on the order of unrelated tests, which is the opposite of what a
+    // contract suite is for.
+    let token = '';
+    let organization = '';
+
+    beforeAll(async () => {
+      const owner = await verifiedUserWithId(
+        `notified-${Date.now()}@example.com`,
+      );
+      token = owner.token;
+      userTokens.push(token);
+
+      const plans = await request(server).get(api('/plans')).expect(200);
+      await request(server)
+        .post(api('/subscription'))
+        .set('Authorization', `Bearer ${token}`)
+        .send({ planId: plans.body[0].id })
+        .expect(200);
+
+      const created = await request(server)
+        .post(api('/organizations'))
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Notification Delivery' })
+        .expect(201);
+      organization = created.body.id;
+    });
+
+    const asSelf = (req: request.Test): request.Test =>
+      auth(token, req).set('x-organization-id', organization);
+
+    it('GET /notifications returns 200, 401 and 403', async () => {
+      const mine = await probe('get', '/notifications', (req) => asSelf(req), '200');
+      // A fresh organization has nothing to report, and the route says so with
+      // an empty page rather than a 404.
+      expect(mine.body.items).toEqual([]);
+
+      await probe('get', '/notifications', (req) => req, '401', 'no token');
+      await probe(
+        'get',
+        '/notifications',
+        (req) => auth(outsiderToken, req).set('x-organization-id', organization),
+        '403',
+        'not a member of this organization',
+      );
+    });
+
+    it('GET /notifications/unread-count returns 200, 401 and 403', async () => {
+      const count = await probe(
+        'get',
+        '/notifications/unread-count',
+        (req) => asSelf(req),
+        '200',
+      );
+      expect(count.body.unread).toBe(0);
+
+      await probe(
+        'get',
+        '/notifications/unread-count',
+        (req) => req,
+        '401',
+        'no token',
+      );
+      await probe(
+        'get',
+        '/notifications/unread-count',
+        (req) => auth(outsiderToken, req).set('x-organization-id', organization),
+        '403',
+        'not a member of this organization',
+      );
+    });
+
+    it('POST /notifications/read-all returns 200, 401 and 403', async () => {
+      await probe('post', '/notifications/read-all', (req) => asSelf(req), '200');
+      await probe('post', '/notifications/read-all', (req) => req, '401', 'no token');
+      await probe(
+        'post',
+        '/notifications/read-all',
+        (req) => auth(outsiderToken, req).set('x-organization-id', organization),
+        '403',
+        'not a member of this organization',
+      );
+    });
+
+    it('POST /notifications/{notificationId}/read returns 200, 401, 403 and 404', async () => {
+      await probe(
+        'post',
+        '/notifications/00000000-0000-4000-8000-000000000000/read',
+        (req) => asSelf(req),
+        '404',
+        'unknown notification',
+      );
+
+      await probe(
+        'post',
+        '/notifications/00000000-0000-4000-8000-000000000000/read',
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'post',
+        '/notifications/00000000-0000-4000-8000-000000000000/read',
+        (req) => auth(outsiderToken, req).set('x-organization-id', organization),
+        '403',
+        'not a member of this organization',
+      );
     });
   });
 

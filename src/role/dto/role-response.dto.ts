@@ -75,6 +75,35 @@ export class MemberResponseDto {
   status: string;
 }
 
+/**
+ * The caller's own membership of the active organization.
+ *
+ * Answers from the membership the guard has *already resolved* for this
+ * request, so it costs no extra lookup and — the reason it exists — it is
+ * readable by a role that holds nothing at all.
+ */
+export class MyMembershipResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  userId: string;
+
+  @ApiProperty({ format: 'uuid' })
+  organizationId: string;
+
+  @ApiProperty({ format: 'uuid' })
+  roleId: string;
+
+  @ApiProperty({ example: 'Developer' })
+  roleName: string;
+
+  @ApiProperty({
+    type: [String],
+    example: ['task.view', 'task.create', 'time_entry.create'],
+    description:
+      'Exactly what this member may do in this organization right now. Read live, so a permission an administrator has since revoked is absent from this list.',
+  })
+  permissions: string[];
+}
+
 export class RoleTemplateDto {
   @ApiProperty({ example: 'developer' })
   key: string;

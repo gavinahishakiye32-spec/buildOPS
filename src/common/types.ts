@@ -27,6 +27,14 @@ export interface AuthContext {
   userId: string;
   organizationId: string | null;
   roleId: string | null;
+  /**
+   * Display name of the role being acted with, when one was resolved.
+   *
+   * Carried so a route can say "your role is X" without a second lookup — the
+   * resolver already has it, and `GET /organizations/:organizationId/me` is the
+   * one route that has to report it.
+   */
+  roleName: string | null;
   permissions: PermissionName[];
   /** Session behind the presented access token; see `AuthenticatedUser.sessionId`. */
   sessionId: string;

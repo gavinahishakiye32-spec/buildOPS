@@ -128,6 +128,48 @@ export const ORGANIZATION_STATUSES = [
   'archived',
 ] as const;
 
+/**
+ * The currencies an organization may be denominated in.
+ *
+ * A closed set of ISO 4217 codes, chosen when the organization is created, and
+ * deliberately *not* the reason any amount is stored. `projects.budget` is a
+ * bare `DECIMAL(10,2)`: changing an organization's currency changes how its
+ * figures are labelled, it does not restate them, because restating them needs
+ * exchange rates this product has no source for.
+ *
+ * RWF carries zero minor units in ISO 4217 while USD carries two, so a formatter
+ * that hardcodes two decimal places misprices a Rwandan budget by up to a
+ * hundredfold. Formatting therefore goes through `Intl.NumberFormat`, which
+ * already knows the minor unit of every code in this list.
+ */
+export const ORGANIZATION_CURRENCIES = [
+  'USD',
+  'EUR',
+  'GBP',
+  'RWF',
+  'KES',
+  'UGX',
+  'TZS',
+  'ZAR',
+  'NGN',
+  'GHS',
+  'EGP',
+  'ETB',
+  'ZMW',
+  'CDF',
+  'INR',
+  'AED',
+  'CAD',
+  'AUD',
+  'JPY',
+  'CNY',
+] as const;
+
+export type OrganizationCurrency = (typeof ORGANIZATION_CURRENCIES)[number];
+
+/** What an organization is denominated in when the creator does not choose. */
+export const DEFAULT_ORGANIZATION_CURRENCY: OrganizationCurrency = 'USD';
+
 export const TEAM_STATUSES = ['active', 'inactive', 'archived'] as const;
 
 export const TEAM_MEMBER_STATUSES = [

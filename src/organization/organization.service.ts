@@ -15,6 +15,7 @@ import {
 import { PlanLimitService } from '../plan-limit/plan-limit.service.js';
 import { RoleService } from '../role/role.service.js';
 import { SubscriptionService } from '../subscription/subscription.service.js';
+import { DEFAULT_ORGANIZATION_CURRENCY } from '../common/enums.js';
 import { Organization } from './organization.entity.js';
 import {
   CreateOrganizationDto,
@@ -89,6 +90,11 @@ export class OrganizationService {
             tenantId: current.id,
             name,
             status: dto.status ?? 'active',
+            // Asked once, here, and then it is a property of the workspace
+            // rather than of whoever created it: every member of the
+            // organization reads the same numbers the same way. An omitted value
+            // is USD, which is what these amounts have always been read in.
+            currency: dto.currency ?? DEFAULT_ORGANIZATION_CURRENCY,
           }),
         );
 

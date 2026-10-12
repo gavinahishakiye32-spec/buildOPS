@@ -7,6 +7,7 @@ import {
   IsUUID,
   Length,
 } from 'class-validator';
+import { AssigneeSummaryDto } from '../../common/dto/assignee-response.dto.js';
 import { TASK_PRIORITIES, TASK_STATUSES } from '../../common/enums.js';
 import { PaginationQueryDto } from '../../common/pagination.dto.js';
 
@@ -35,12 +36,12 @@ export class CreateTaskDto {
 
   @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
-    description:
-      'Optional badge of the same organization (classification, spec §10)',
+    description: 'Optional badge of the same organization (classification, spec §10)',
   })
   @IsOptional()
   @IsUUID()
   badgeId?: string;
+
 
   @ApiPropertyOptional({ enum: TASK_PRIORITIES, default: 'medium' })
   @IsOptional()
@@ -80,13 +81,15 @@ export class UpdateTaskDto {
   @IsOptional()
   teamId?: string | null;
 
-  @ApiPropertyOptional({
+@ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
     description:
       'Badge of the same organization (null clears the classification)',
   })
   @IsOptional()
+  @IsUUID()
   badgeId?: string | null;
+
 
   @ApiPropertyOptional({ enum: TASK_PRIORITIES })
   @IsOptional()
@@ -132,6 +135,7 @@ export class TaskQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   badgeId?: string;
+
 }
 
 export class TaskResponseDto {
@@ -167,6 +171,27 @@ export class TaskResponseDto {
 
   @ApiPropertyOptional({ example: '2026-11-01', nullable: true })
   dueDate: Date | null;
+
+  @ApiProperty({
+    example: 4,
+    description: 'Subtasks under this task, excluding deleted ones.',
+  })
+  subtaskTotal: number;
+
+  @ApiProperty({
+    example: 2,
+    description: 'How many of those subtasks are `done`.',
+  })
+  subtaskDone: number;
+
+  @ApiProperty({
+    type: [AssigneeSummaryDto],
+    description:
+      'Distinct people with a subtask assigned on this task. This is the task\'s ' +
+      'whole team -- the people actually doing the work -- not an owner of the ' +
+      'task itself, which is deliberately not a thing here.',
+  })
+  assignees: AssigneeSummaryDto[];
 
   @ApiProperty({ example: '2026-09-30T10:00:00.000Z' })
   createdAt: Date;

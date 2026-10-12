@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 
 import { Organization } from '../organization/organization.entity.js';
+import { Role } from '../role/role.entity.js';
 import { User } from '../user/user.entity.js';
 
 /**
@@ -53,6 +54,26 @@ export class OrganizationInvitation {
   /** The template's display name, copied so history survives a template edit. */
   @Column({ name: 'role_name', type: 'varchar', length: 255 })
   roleName: string;
+
+  /**
+   * The role this invitation grants, when the inviter named one.
+   *
+   * This is what makes an invitation able to carry a role the administrator
+   * actually built. Without it the only thing that can travel is `template_key`,
+   * and acceptance has to manufacture a brand new role from that template --
+   * which grants the template's permissions rather than the chosen role's, and
+   * leaves a second role row behind under the same name.
+   *
+   * Null means "no role was named", and then `templateKey` is what acceptance
+   * falls back to. Every invitation written before the column existed is in that
+   * state, which is why it is nullable rather than backfilled.
+   */
+  @Column({ name: 'role_id', type: 'uuid', nullable: true })
+  roleId: string | null;
+
+  @ManyToOne(() => Role, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'role_id' })
+  role: Role | null;
 
   @Column({ name: 'token_hash', type: 'varchar', length: 64 })
   tokenHash: string;
@@ -100,6 +121,7 @@ export class OrganizationInvitation {
       organizationId: this.organizationId,
       email: this.email,
       templateKey: this.templateKey,
+      roleId: this.roleId,
       roleName: this.roleName,
       status: this.reportedStatus(),
       expiresAt: this.expiresAt,

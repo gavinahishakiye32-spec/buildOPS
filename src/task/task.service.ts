@@ -6,6 +6,7 @@ import {
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
+import { EMPTY_ROLLUP, type TaskRollup } from '../common/assignee.js';
 import { Badge } from '../badge/badge.entity.js';
 import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
@@ -20,10 +21,21 @@ import {
 } from '../common/soft-delete.js';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from './dto/task.dto.js';
 
+/** A task plus the subtask totals the board renders on its card. */
+export interface TaskWithRollup {
+  task: Task;
+  rollup: TaskRollup;
+}
+
 /**
  * Tasks belong to a project of the organization and are assigned to a team of
  * the same organization, optionally classified by a badge (spec §10). The
  * organization is always derived from the project, never from client input.
+ *
+ * A task also has one owner, and subtasks have theirs. Both are members of the
+ * organization -- not members of the task's team: which team a task sits on
+ * and who does its work are separate questions, and the second one is the one
+ * a person actually needs answered.
  */
 @Injectable()
 export class TaskService {
@@ -45,7 +57,7 @@ export class TaskService {
   async list(
     organizationId: string,
     query: TaskQueryDto,
-  ): Promise<Paginated<Task>> {
+  ): Promise<Paginated<TaskWithRollup>> {
     const { page, limit, skip } = resolvePage(query);
     const qb = this.scopedQuery(organizationId);
 
@@ -67,13 +79,95 @@ export class TaskService {
       qb.andWhere('task.badge_id = :badgeId', { badgeId: query.badgeId });
     }
 
-    const [items, total] = await qb
+    const [tasks, total] = await qb
       .orderBy('task.created_at', 'DESC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();
 
-    return toPaginated(items, total, page, limit);
+    const rollups = await this.rollupsFor(tasks.map((task) => task.id));
+
+    return toPaginated(
+      tasks.map((task) => ({ task, rollup: rollups.get(task.id) ?? EMPTY_ROLLUP })),
+      total,
+      page,
+      limit,
+    );
+  }
+
+  /**
+   * The subtask totals for a set of tasks, from one query.
+   *
+   * A board renders "3 of 7 done" and a stack of faces on every card, so doing
+   * this per task would be one extra round trip each -- twenty tasks, twenty
+   * queries. One grouped aggregate over the ids of the page keeps it at one.
+   *
+   * Rows are read through the raw table rather than the `Subtask` entity on
+   * purpose: this is a count, and hydrating full entities to throw all but two
+   * fields away would move far more data across the wire for the same answer.
+   */
+  private async rollupsFor(taskIds: string[]): Promise<Map<string, TaskRollup>> {
+    const rollups = new Map<string, TaskRollup>();
+
+    if (taskIds.length === 0) {
+      return rollups;
+    }
+
+    const rows = await this.subtaskRepo.manager.query(
+      `
+        SELECT
+          s.task_id                                    AS "taskId",
+          COUNT(*)                                     AS "total",
+          COUNT(*) FILTER (WHERE s.status = 'done')    AS "done",
+          s.assigned_to                                AS "assigneeId",
+          u.name                                       AS "assigneeName"
+        FROM subtasks s
+        LEFT JOIN users u ON u.id = s.assigned_to
+        WHERE s.task_id = ANY($1::uuid[]) AND s.deleted_at IS NULL
+        GROUP BY s.task_id, s.assigned_to, u.name
+      `,
+      [taskIds],
+    );
+
+    for (const row of rows as {
+      taskId: string;
+      total: string;
+      done: string;
+      assigneeId: string | null;
+      assigneeName: string | null;
+    }[]) {
+      const current = rollups.get(row.taskId) ?? EMPTY_ROLLUP;
+
+      const total = Number(row.total);
+      const done = Number(row.done);
+
+      const assignees =
+        row.assigneeId && !current.assignees.some((a) => a.id === row.assigneeId)
+          ? [
+              ...current.assignees,
+              { id: row.assigneeId, name: row.assigneeName },
+            ]
+          : current.assignees;
+
+      rollups.set(row.taskId, {
+        subtaskTotal: current.subtaskTotal + total,
+        subtaskDone: current.subtaskDone + done,
+        assignees,
+      });
+    }
+
+    return rollups;
+  }
+
+  /** One task, with the totals its detail view shows. */
+  async findOneDetailed(
+    organizationId: string,
+    taskId: string,
+  ): Promise<TaskWithRollup> {
+    const task = await this.findOne(organizationId, taskId);
+    const rollups = await this.rollupsFor([task.id]);
+
+    return { task, rollup: rollups.get(task.id) ?? EMPTY_ROLLUP };
   }
 
   async findOne(organizationId: string, taskId: string): Promise<Task> {
@@ -93,7 +187,7 @@ export class TaskService {
     const teamId = await this.resolveTeam(organizationId, dto.teamId);
     const badgeId = await this.resolveBadge(organizationId, dto.badgeId);
 
-    return this.taskRepo.save(
+    const created = await this.taskRepo.save(
       this.taskRepo.create({
         projectId: project.id,
         teamId,
@@ -105,6 +199,11 @@ export class TaskService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
       }),
     );
+
+    // Re-read rather than answering from the insert: the row just written has
+    // no owner relation loaded, so `create` would report a task assigned on the
+    // way in as unassigned.
+    return this.findOne(organizationId, created.id);
   }
 
   async update(
