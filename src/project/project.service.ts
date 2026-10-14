@@ -16,6 +16,7 @@ import { Client } from '../client/client.entity.js';
 import { Task } from '../task/task.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
 import { Project } from './project.entity.js';
 import {
   CASCADE_CONFIRMATION_REQUIRED,
@@ -46,6 +47,8 @@ export class ProjectService {
     private readonly subtaskRepo: Repository<Subtask>,
     @InjectRepository(TimeEntry)
     private readonly timeEntryRepo: Repository<TimeEntry>,
+    @InjectRepository(Milestone)
+    private readonly milestoneRepo: Repository<Milestone>,
     private readonly planLimits: PlanLimitService,
   ) {}
 
@@ -194,6 +197,7 @@ export class ProjectService {
       const taskRepo = manager.getRepository(Task);
       const subtaskRepo = manager.getRepository(Subtask);
       const timeEntryRepo = manager.getRepository(TimeEntry);
+      const milestoneRepo = manager.getRepository(Milestone);
 
       // Collected inside the transaction so the ids and the flagging see the
       // same snapshot; a task created mid-delete belongs to one side or the
@@ -237,6 +241,25 @@ export class ProjectService {
         await softDeleteBy(taskRepo, 'id IN (:...taskIds)', { taskIds }, actorId, at);
       }
 
+      // Milestones share the project's timestamp so the restore below brings
+      // back exactly the set that went down -- the same key the tasks use.
+      // The milestones themselves do not carry the tasks down with them: the
+      // tasks are already flagged by the project, and the task rows keep their
+      // `milestone_id`, which restore reassembles.
+      const milestoneIds = (
+        await milestoneRepo.find({ where: { projectId, deletedAt: IsNull() } })
+      ).map((milestone) => milestone.id);
+
+      if (milestoneIds.length) {
+        await softDeleteBy(
+          milestoneRepo,
+          'id IN (:...milestoneIds)',
+          { milestoneIds },
+          actorId,
+          at,
+        );
+      }
+
       await softDeleteBy(
         projectRepo,
         'id = :projectId',
@@ -245,7 +268,10 @@ export class ProjectService {
         at,
       );
 
-      return { deleted: entries + subtaskIds.length + taskIds.length + 1 };
+      return {
+        deleted:
+          entries + subtaskIds.length + taskIds.length + milestoneIds.length + 1,
+      };
     });
   }
 
@@ -282,6 +308,7 @@ export class ProjectService {
       const taskRepo = manager.getRepository(Task);
       const subtaskRepo = manager.getRepository(Subtask);
       const timeEntryRepo = manager.getRepository(TimeEntry);
+      const milestoneRepo = manager.getRepository(Milestone);
 
       const taskIds = (
         await taskRepo.find({
@@ -310,6 +337,19 @@ export class ProjectService {
 
       if (taskIds.length) {
         await restoreBy(taskRepo, 'id IN (:...taskIds)', { taskIds });
+      }
+
+      const milestoneIds = (
+        await milestoneRepo.find({
+          where: { projectId, deletedAt: at },
+          withDeleted: true,
+        })
+      ).map((milestone) => milestone.id);
+
+      if (milestoneIds.length) {
+        await restoreBy(milestoneRepo, 'id IN (:...milestoneIds)', {
+          milestoneIds,
+        });
       }
 
       await restoreBy(projectRepo, 'id = :projectId', { projectId });

@@ -4,6 +4,7 @@ import { DataSource, type EntityTarget, type ObjectLiteral } from 'typeorm';
 import { Subtask } from '../subtask/subtask.entity.js';
 import { Task } from '../task/task.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
 import { Project } from '../project/project.entity.js';
 import { Client } from '../client/client.entity.js';
 import { Badge } from '../badge/badge.entity.js';
@@ -28,6 +29,7 @@ const TABLES: ReadonlyArray<{
   { name: 'time_entries', entity: TimeEntry },
   { name: 'subtasks', entity: Subtask },
   { name: 'tasks', entity: Task },
+  { name: 'milestones', entity: Milestone },
   { name: 'projects', entity: Project },
   { name: 'clients', entity: Client },
   { name: 'badges', entity: Badge },

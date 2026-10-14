@@ -35,6 +35,15 @@ export class CreateTaskDto {
   teamId?: string;
 
   @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    description:
+      'Milestone of the same project the task is scheduled under',
+  })
+  @IsOptional()
+  @IsUUID()
+  milestoneId?: string;
+
+  @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
     description: 'Optional badge of the same organization (classification, spec §10)',
   })
@@ -81,7 +90,16 @@ export class UpdateTaskDto {
   @IsOptional()
   teamId?: string | null;
 
-@ApiPropertyOptional({
+  @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    description:
+      'Milestone of the same project (null detaches it)',
+  })
+  @IsOptional()
+  @IsUUID()
+  milestoneId?: string | null;
+
+  @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
     description:
       'Badge of the same organization (null clears the classification)',
@@ -131,6 +149,11 @@ export class TaskQueryDto extends PaginationQueryDto {
   @IsUUID()
   teamId?: string;
 
+  @ApiPropertyOptional({ example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6' })
+  @IsOptional()
+  @IsUUID()
+  milestoneId?: string;
+
   @ApiPropertyOptional({ example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b' })
   @IsOptional()
   @IsUUID()
@@ -156,6 +179,12 @@ export class TaskResponseDto {
     nullable: true,
   })
   badgeId: string | null;
+
+  @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    nullable: true,
+  })
+  milestoneId: string | null;
 
   @ApiProperty({ example: 'Implement invoicing endpoint' })
   title: string;

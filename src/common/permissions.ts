@@ -35,6 +35,14 @@ export const PERMISSIONS = {
   TASK_CREATE: 'task.create',
   TASK_UPDATE: 'task.update',
   TASK_DELETE: 'task.delete',
+  TASK_ASSIGN: 'task.assign',
+  MILESTONE_VIEW: 'milestone.view',
+  MILESTONE_CREATE: 'milestone.create',
+  MILESTONE_UPDATE: 'milestone.update',
+  MILESTONE_DELETE: 'milestone.delete',
+  NOTIFICATION_VIEW: 'notification.view',
+  NOTIFICATION_UPDATE: 'notification.update',
+  NOTIFICATION_DELETE: 'notification.delete',
   SUBTASK_VIEW: 'subtask.view',
   SUBTASK_CREATE: 'subtask.create',
   SUBTASK_UPDATE: 'subtask.update',
@@ -105,6 +113,11 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       'task.create' as PermissionName,
       'task.update' as PermissionName,
       'task.delete' as PermissionName,
+      'task.assign' as PermissionName,
+      'milestone.view' as PermissionName,
+      'milestone.create' as PermissionName,
+      'milestone.update' as PermissionName,
+      'milestone.delete' as PermissionName,
       'subtask.create' as PermissionName,
       'subtask.update' as PermissionName,
       'subtask.delete' as PermissionName,
@@ -119,6 +132,12 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_COMPLEXITY_UPDATE,
       PERMISSIONS.TIME_COMPLEXITY_DELETE,
       PERMISSIONS.DASHBOARD_VIEW,
+      // Runs delivery, so it also owns milestones and the notification inbox;
+      // `notification.update` and `notification.delete` only ever touch the
+      // actor's own rows, so they are safe to share widely.
+      PERMISSIONS.NOTIFICATION_VIEW,
+      PERMISSIONS.NOTIFICATION_UPDATE,
+      PERMISSIONS.NOTIFICATION_DELETE,
       // Runs delivery, so it owns the conventions the whole team works to.
       // `settings.update` changes what everyone in the organization sees, which
       // is why it is not handed to a developer or a tester.
@@ -145,6 +164,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('subtask'),
       PERMISSIONS.TASK_CREATE,
       PERMISSIONS.TASK_UPDATE,
+      PERMISSIONS.TASK_ASSIGN,
+      PERMISSIONS.MILESTONE_VIEW,
       PERMISSIONS.SUBTASK_CREATE,
       PERMISSIONS.SUBTASK_UPDATE,
       PERMISSIONS.SUBTASK_ASSIGN,
@@ -154,6 +175,11 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_ENTRY_STOP_TIMER,
       PERMISSIONS.DASHBOARD_VIEW,
       PERMISSIONS.SETTINGS_VIEW,
+      // The inbox is personal: update and delete act only on the caller's own
+      // notifications, so a developer may keep their own inbox tidy.
+      PERMISSIONS.NOTIFICATION_VIEW,
+      PERMISSIONS.NOTIFICATION_UPDATE,
+      PERMISSIONS.NOTIFICATION_DELETE,
     ],
   },
   {
@@ -170,6 +196,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('task'),
       ...viewOnly('subtask'),
       PERMISSIONS.TASK_UPDATE,
+      PERMISSIONS.MILESTONE_VIEW,
       PERMISSIONS.SUBTASK_CREATE,
       PERMISSIONS.SUBTASK_UPDATE,
       PERMISSIONS.TIME_ENTRY_VIEW,
@@ -178,6 +205,11 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_ENTRY_STOP_TIMER,
       PERMISSIONS.DASHBOARD_VIEW,
       PERMISSIONS.SETTINGS_VIEW,
+      // A reviewer still gets pinged about what they are asked to look at and can
+      // manage their own inbox.
+      PERMISSIONS.NOTIFICATION_VIEW,
+      PERMISSIONS.NOTIFICATION_UPDATE,
+      PERMISSIONS.NOTIFICATION_DELETE,
     ],
   },
   {
@@ -195,6 +227,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('badge'),
       ...viewOnly('task'),
       ...viewOnly('subtask'),
+      ...viewOnly('milestone'),
+      ...viewOnly('notification'),
       ...viewOnly('time_entry'),
       ...viewOnly('time_complexity'),
       PERMISSIONS.DASHBOARD_VIEW,
@@ -210,6 +244,26 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
 export function isPermissionName(value: string): value is PermissionName {
   return (ALL_PERMISSIONS as string[]).includes(value);
 }
+
+/**
+ * Permissions that make a member part of the "what's new in the system"
+ * broadcast audience.
+ *
+ * Managing a project or a milestone is the line between working on delivery and
+ * running it, so a role holding any of these gets the task/subtask/milestone
+ * lifecycle feed and nothing narrower does. Chosen by capability rather than by
+ * template so the audience is dynamic: grant one of these to a custom role and
+ * it joins the feed, revoke them and it leaves -- no code change, no fixed list
+ * of role names or keys.
+ */
+export const BROADCAST_AUDIENCE_PERMISSIONS: PermissionName[] = [
+  PERMISSIONS.PROJECT_CREATE,
+  PERMISSIONS.PROJECT_UPDATE,
+  PERMISSIONS.PROJECT_DELETE,
+  PERMISSIONS.MILESTONE_CREATE,
+  PERMISSIONS.MILESTONE_UPDATE,
+  PERMISSIONS.MILESTONE_DELETE,
+];
 
 /** Keys of {@link DEFAULT_ROLE_TEMPLATES}, for the Swagger enum of `templateKey`. */
 export const ROLE_TEMPLATE_KEYS: string[] = DEFAULT_ROLE_TEMPLATES.map(

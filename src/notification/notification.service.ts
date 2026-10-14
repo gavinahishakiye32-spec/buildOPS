@@ -1,13 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import {
   resolvePage,
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
+import { BROADCAST_AUDIENCE_PERMISSIONS } from '../common/permissions.js';
+import { Role } from '../role/role.entity.js';
 import { Notification } from './notification.entity.js';
 import type { PaginationQueryDto } from '../common/pagination.dto.js';
+
+/**
+ * Permissions that make a member part of the "what's new in the system"
+ * broadcast audience (project and milestone management).
+ */
+const BROADCAST_PERMISSIONS = new Set<string>(BROADCAST_AUDIENCE_PERMISSIONS);
 
 /** Everything the caller needs to decide who to tell and what to say. */
 export interface NotificationRequest {
@@ -45,6 +53,8 @@ export class NotificationService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepo: Repository<Notification>,
+    @InjectRepository(Role)
+    private readonly roleRepo: Repository<Role>,
   ) {}
 
   async notify(request: NotificationRequest): Promise<Notification | null> {
@@ -141,5 +151,68 @@ export class NotificationService {
     );
 
     return result.affected ?? 0;
+  }
+
+  /**
+   * Fans an event out to every active member whose role manages projects or
+   * milestones.
+   *
+   * This is the one place a single action targets more than one recipient --
+   * creating a milestone is news to the whole management team, not to the person
+   * who did it. The audience is resolved from permissions rather than from a
+   * hard-coded role name so a renamed or custom role with the same rights is
+   * included, and the actor is skipped since `notify` already treats
+   * self-targeted writes as noise.
+   *
+   * Like `notify`, this is best-effort and never throws into the caller; each
+   * write is independently guarded, so one bad recipient cannot stop the rest.
+   * `data` is accepted for the caller's convenience and currently not persisted
+   * -- the notification table carries no payload column.
+   */
+  async broadcast(
+    organizationId: string,
+    actorId: string,
+    type: string,
+    title: string,
+    body?: string | null,
+    data?: Record<string, unknown>,
+  ): Promise<number> {
+    void data;
+
+    const roles = await this.roleRepo.find({
+      where: { organizationId, status: 'active', userId: Not(IsNull()) },
+      relations: { permissions: true },
+    });
+
+    let delivered = 0;
+
+    for (const role of roles) {
+      if (!role.userId || role.userId === actorId) {
+        continue;
+      }
+
+      const canReceive = (role.permissions ?? []).some((permission) =>
+        BROADCAST_PERMISSIONS.has(permission.name),
+      );
+
+      if (!canReceive) {
+        continue;
+      }
+
+      const created = await this.notify({
+        organizationId,
+        userId: role.userId,
+        actorId,
+        type,
+        title,
+        body: body ?? null,
+      });
+
+      if (created) {
+        delivered += 1;
+      }
+    }
+
+    return delivered;
   }
 }

@@ -3,6 +3,7 @@ import { EMPTY_ROLLUP, type TaskRollup } from '../common/assignee.js';
 import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
 import { Badge } from '../badge/badge.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
 
 @Entity('tasks')
 export class Task {
@@ -37,6 +38,14 @@ export class Task {
    * underneath it. An owner here would be a second answer to the same question,
    * and the one that goes stale the moment a step is handed to somebody else.
    */
+
+  /** The phase calendar entry this task is scheduled under, if any. */
+  @Column({ name: 'milestone_id', type: 'uuid', nullable: true })
+  milestoneId: string | null;
+
+  @ManyToOne(() => Milestone, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'milestone_id' })
+  milestone: Milestone | null;
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
@@ -89,6 +98,7 @@ export class Task {
       projectId: this.projectId,
       teamId: this.teamId,
       badgeId: this.badgeId,
+      milestoneId: this.milestoneId,
       title: this.title,
       description: this.description,
       priority: this.priority,

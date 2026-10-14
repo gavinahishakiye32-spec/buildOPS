@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import {
@@ -12,6 +17,7 @@ import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
+import { MilestoneService } from '../milestone/milestone.service.js';
 import { Task } from './task.entity.js';
 import {
   CASCADE_CONFIRMATION_REQUIRED,
@@ -52,6 +58,9 @@ export class TaskService {
     private readonly subtaskRepo: Repository<Subtask>,
     @InjectRepository(TimeEntry)
     private readonly timeEntryRepo: Repository<TimeEntry>,
+    // A task may be scheduled under a milestone of the same project. Resolution
+    // (and the "same project" rule) lives with the milestone, not here.
+    private readonly milestoneService: MilestoneService,
   ) {}
 
   async list(
@@ -77,6 +86,11 @@ export class TaskService {
     }
     if (query.badgeId) {
       qb.andWhere('task.badge_id = :badgeId', { badgeId: query.badgeId });
+    }
+    if (query.milestoneId) {
+      qb.andWhere('task.milestone_id = :milestoneId', {
+        milestoneId: query.milestoneId,
+      });
     }
 
     const [tasks, total] = await qb
@@ -186,12 +200,18 @@ export class TaskService {
     const project = await this.requireProject(organizationId, dto.projectId);
     const teamId = await this.resolveTeam(organizationId, dto.teamId);
     const badgeId = await this.resolveBadge(organizationId, dto.badgeId);
+    const milestoneId = await this.resolveMilestone(
+      organizationId,
+      project.id,
+      dto.milestoneId,
+    );
 
     const created = await this.taskRepo.save(
       this.taskRepo.create({
         projectId: project.id,
         teamId,
         badgeId,
+        milestoneId,
         title: dto.title.trim(),
         description: dto.description ?? null,
         priority: dto.priority ?? 'medium',
@@ -223,6 +243,13 @@ export class TaskService {
       task.teamId = await this.resolveTeam(
         organizationId,
         dto.teamId ?? undefined,
+      );
+    }
+    if (dto.milestoneId !== undefined) {
+      task.milestoneId = await this.resolveMilestone(
+        organizationId,
+        task.projectId,
+        dto.milestoneId,
       );
     }
     if (dto.badgeId !== undefined) {
@@ -486,5 +513,32 @@ export class TaskService {
     }
 
     return badge.id;
+  }
+
+  /**
+   * A milestone must exist in the organization *and* belong to the same project
+   * as the task: a milestone of a sibling project is a different schedule, and
+   * mixing schedules is how a "release" target silently ends up under a task of
+   * the wrong plan.
+   */
+  private async resolveMilestone(
+    organizationId: string,
+    projectId: string,
+    milestoneId?: string | null,
+  ): Promise<string | null> {
+    if (!milestoneId) {
+      return null;
+    }
+
+    const milestone = await this.milestoneService.findOne(
+      organizationId,
+      milestoneId,
+    );
+
+    if (milestone.projectId !== projectId) {
+      throw new BadRequestException('Milestone does not belong to this project');
+    }
+
+    return milestone.id;
   }
 }

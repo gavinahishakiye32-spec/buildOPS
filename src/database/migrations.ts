@@ -11,6 +11,8 @@ import { OrganizationCurrency1700000000008 } from './migrations/1700000000008-or
 import { TaskAssignment1700000000009 } from './migrations/1700000000009-task-assignment.js';
 import { DropTaskAssignee1700000000010 } from './migrations/1700000000010-drop-task-assignee.js';
 import { Notifications1700000000011 } from './migrations/1700000000011-notifications.js';
+import { Milestones1700000000012 } from './migrations/1700000000012-milestones.js';
+import { RoleTemplateKeys1700000000013 } from './migrations/1700000000013-role-template-keys.js';
 
 /**
  * The ordered migration list. TypeORM records what has run in the `migrations`
@@ -31,4 +33,6 @@ export const MIGRATIONS: (new () => MigrationInterface)[] = [
   TaskAssignment1700000000009,
   DropTaskAssignee1700000000010,
   Notifications1700000000011,
+  Milestones1700000000012,
+  RoleTemplateKeys1700000000013,
 ];

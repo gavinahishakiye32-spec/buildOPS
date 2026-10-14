@@ -25,6 +25,7 @@ import { ProjectModule } from './project/project.module.js';
 import { BadgeModule } from './badge/badge.module.js';
 import { TaskModule } from './task/task.module.js';
 import { SubtaskModule } from './subtask/subtask.module.js';
+import { MilestoneModule } from './milestone/milestone.module.js';
 import { NotificationModule } from './notification/notification.module.js';
 import { TimeEntryModule } from './time-entry/time-entry.module.js';
 import { TimeComplexityModule } from './time-complexity/time-complexity.module.js';
@@ -108,7 +109,8 @@ import { SettingsModule } from './settings/settings.module.js';
     BadgeModule,
     TaskModule,
     SubtaskModule,
-  NotificationModule,
+    MilestoneModule,
+    NotificationModule,
     TimeEntryModule,
     TimeComplexityModule,
     DashboardModule,

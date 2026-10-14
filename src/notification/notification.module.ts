@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '../auth/auth.module.js';
 import { AuthorizationModule } from '../auth/authorization.module.js';
+import { Role } from '../role/role.entity.js';
 import { Notification } from './notification.entity.js';
 import { NotificationController } from './notification.controller.js';
 import { NotificationService } from './notification.service.js';
@@ -14,7 +15,9 @@ import { NotificationService } from './notification.service.js';
     // notification is addressed to its recipient and to nobody else -- but the
     // guard still has to be constructible.
     AuthorizationModule,
-    TypeOrmModule.forFeature([Notification]),
+    // `Role` is here for `broadcast`, which resolves its audience from the
+    // members' role permissions rather than from a hard-coded name.
+    TypeOrmModule.forFeature([Notification, Role]),
   ],
   controllers: [NotificationController],
   providers: [NotificationService],

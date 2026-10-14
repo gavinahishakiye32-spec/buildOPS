@@ -7,6 +7,7 @@ import { Project } from './project.entity.js';
 import { Task } from '../task/task.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
 import { ProjectService } from './project.service.js';
 import { AuthorizationModule } from '../auth/authorization.module.js';
 import { AuthModule } from '../auth/auth.module.js';
@@ -17,7 +18,7 @@ import { AuthModule } from '../auth/auth.module.js';
     AuthorizationModule,
     // The cascade flags tasks, subtasks and time entries as well, so the delete
     // needs those repositories in this module's own context.
-    TypeOrmModule.forFeature([Project, Client, Task, Subtask, TimeEntry]),
+    TypeOrmModule.forFeature([Project, Client, Task, Subtask, TimeEntry, Milestone]),
     PlanLimitModule,
   ],
   controllers: [ProjectController],
