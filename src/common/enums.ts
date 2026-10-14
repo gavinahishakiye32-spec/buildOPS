@@ -202,6 +202,45 @@ export const SUBTASK_STATUSES = [
   'cancelled',
 ] as const;
 
+/**
+ * The states of a milestone, a project phase deliveries are grouped under.
+ * Mirror of `PROJECT_STATUSES` in the `planned/completed/cancelled` values, so
+ * a milestone and the project it belongs to move through the same vocabulary.
+ */
+export const MILESTONE_STATUSES = [
+  'planned',
+  'in_progress',
+  'completed',
+  'cancelled',
+] as const;
+
+/**
+ * The notification kinds the system produces.
+ *
+ * The kind is a verb/object pair and doubles as the machine-readable grouping
+ * a client can filter by. Targeted kinds name the one member a change is
+ * about: `task.assigned`/`subtask.assigned` go to the assignee and
+ * `task.status_changed` goes to the assignee when somebody else moves the
+ * task. The `*.created`/`*.updated`/`*.deleted` (and `milestone.restored`)
+ * kinds are broadcast to the organization's owners and project managers, so a
+ * manager sees what is new in the system without polling every board.
+ */
+export const NOTIFICATION_KINDS = [
+  'task.assigned',
+  'task.status_changed',
+  'task.created',
+  'task.updated',
+  'task.deleted',
+  'subtask.assigned',
+  'subtask.created',
+  'subtask.updated',
+  'subtask.deleted',
+  'milestone.created',
+  'milestone.updated',
+  'milestone.deleted',
+  'milestone.restored',
+] as const;
+
 export const TIME_COMPLEXITY_NAMES = [
   'low',
   'medium',

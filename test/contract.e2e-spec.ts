@@ -1945,6 +1945,56 @@ describe('published contract vs runtime (e2e)', () => {
       );
     });
 
+    it('refuses role edits that would strand the administrator (guard rails)', async () => {
+      const roles = await probe(
+        'get',
+        `/organizations/${organizationId}/roles`,
+        (req) => asOwner(req),
+        '200',
+      );
+      const ownerRole = (roles.body as { name: string; userId: string }[]).find(
+        (role) => role.name === 'Owner' && role.userId !== null,
+      );
+      expect(ownerRole).toBeDefined();
+      const ownerId = (ownerRole as { userId: string }).userId as string;
+
+      // An administrator cannot strip `role.update` from the role they hold...
+      await probe(
+        'put',
+        `/organizations/${organizationId}/roles/${ownerRole!.id}/permissions`,
+        (req) => asOwner(req).send({ permissions: ['dashboard.view'] }),
+        '400',
+        'self role permission lockout',
+      );
+
+      // ...nor delete a role a member holds (their own included)...
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/roles/${ownerRole!.id}`,
+        (req) => asOwner(req),
+        '400',
+        'assigned role cannot be deleted',
+      );
+
+      // ...nor unassign the role that grants their own access...
+      await probe(
+        'delete',
+        `/organizations/${organizationId}/roles/${ownerRole!.id}/assign`,
+        (req) => asOwner(req),
+        '400',
+        'self unassign',
+      );
+
+      // ...nor switch their own membership onto another role.
+      await probe(
+        'patch',
+        `/organizations/${organizationId}/members/${ownerId}`,
+        (req) => asOwner(req).send({ roleId: spareRoleId }),
+        '400',
+        'self role change',
+      );
+    });
+
     it('DELETE /organizations/{organizationId}/roles/{roleId} returns 200, 401, 403 and 404', async () => {
       await probe(
         'delete',

@@ -52,11 +52,11 @@ export class TaskController {
 
   @Post()
   @OrganizationHeader()
-  @RequirePermissions(PERMISSIONS.TASK_CREATE)
+  @RequirePermissions(PERMISSIONS.TASK_CREATE, PERMISSIONS.TASK_ASSIGN)
   @ApiOperation({
     summary: 'Create a task',
     description:
-      'Creates a task in a project of the active organization. Team and badge, when provided, must belong to the same organization.',
+      'Creates a task in a project of the active organization. Team and badge, when provided, must belong to the same organization. An assignee, when provided, must be an active member of the task team; a milestone, when provided, must belong to the same project.',
   })
   @ApiResponse({
     description: 'Task created',
@@ -68,7 +68,11 @@ export class TaskController {
     @OrgAuth() auth: OrganizationAuthContext,
     @Body() dto: CreateTaskDto,
   ): Promise<TaskResponseDto> {
-    const task = await this.taskService.create(auth.organizationId, dto);
+    const task = await this.taskService.create(
+      auth.organizationId,
+      auth.userId,
+      dto,
+    );
     return task.toResponse();
   }
 
@@ -174,7 +178,7 @@ export class TaskController {
   @ApiOperation({
     summary: 'Update a task',
     description:
-      'Updates title, description, priority, status, due date, team assignment and badge classification.',
+      'Updates title, description, priority, status, due date, team assignment, badge classification, assignee and milestone.',
   })
   @ApiResponse({
     description: 'The task as updated',
@@ -190,6 +194,7 @@ export class TaskController {
     const task = await this.taskService.update(
       auth.organizationId,
       taskId,
+      auth.userId,
       dto,
     );
     return task.toResponse();

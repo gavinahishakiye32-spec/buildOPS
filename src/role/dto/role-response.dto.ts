@@ -34,6 +34,13 @@ export class RoleResponseDto {
   @ApiProperty({ example: 'Developer' })
   name: string;
 
+  @ApiPropertyOptional({
+    example: 'developer',
+    description:
+      'Role template the role was created from; null for ad-hoc roles built with POST /roles',
+  })
+  key: string | null;
+
   @ApiPropertyOptional({ example: 'Creates and updates development work.' })
   description: string | null;
 

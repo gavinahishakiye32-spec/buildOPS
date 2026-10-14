@@ -2,6 +2,8 @@ import { Column, CreateDateColumn, DeleteDateColumn, Entity, JoinColumn, ManyToO
 import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
 import { Badge } from '../badge/badge.entity.js';
+import { User } from '../user/user.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
 
 @Entity('tasks')
 export class Task {
@@ -28,6 +30,21 @@ export class Task {
   @ManyToOne(() => Badge, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'badge_id' })
   badge: Badge | null;
+
+  /** Assigned user — must be an active TeamMember of the assigned team. */
+  @Column({ name: 'assigned_to', type: 'uuid', nullable: true })
+  assignedTo: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'assigned_to' })
+  assignee: User | null;
+
+  @Column({ name: 'milestone_id', type: 'uuid', nullable: true })
+  milestoneId: string | null;
+
+  @ManyToOne(() => Milestone, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'milestone_id' })
+  milestone: Milestone | null;
 
   @Column({ type: 'varchar', length: 255 })
   title: string;
@@ -80,6 +97,8 @@ export class Task {
       projectId: this.projectId,
       teamId: this.teamId,
       badgeId: this.badgeId,
+      assignedTo: this.assignedTo,
+      milestoneId: this.milestoneId,
       title: this.title,
       description: this.description,
       priority: this.priority,

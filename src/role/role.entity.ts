@@ -57,6 +57,15 @@ export class Role {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
+  /**
+   * The role template this role was created from (`owner`, `project_manager`,
+   * ...), or `null` for roles built ad hoc with POST /roles. Provenance rather
+   * than behaviour: it lets an administrator see where a role came from without
+   * depending on a display name that can be renamed.
+   */
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  key: string | null;
+
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
@@ -80,6 +89,7 @@ export class Role {
       organizationId: this.organizationId,
       userId: this.userId,
       name: this.name,
+      key: this.key ?? null,
       description: this.description,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,

@@ -1673,6 +1673,16 @@
               }
             }
           },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Missing, invalid or expired access token",
             "content": {
@@ -2264,7 +2274,7 @@
         ]
       },
       "delete": {
-        "description": "Deletes the role and the permissions attached to it.",
+        "description": "Deletes an unassigned role and the permissions attached to it. A role a member still holds is refused: unassign or repoint that member first, so deleting a role cannot silently strip somebody of their access.",
         "operationId": "RoleController_deleteRole",
         "parameters": [
           {
@@ -2293,6 +2303,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleMessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             }
@@ -2641,6 +2661,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             }
@@ -7068,7 +7098,7 @@
     },
     "/tasks": {
       "post": {
-        "description": "Creates a task in a project of the active organization. Team and badge, when provided, must belong to the same organization.",
+        "description": "Creates a task in a project of the active organization. Team and badge, when provided, must belong to the same organization. An assignee, when provided, must be an active member of the task team; a milestone, when provided, must belong to the same project.",
         "operationId": "TaskController_create",
         "parameters": [
           {
@@ -7174,7 +7204,8 @@
           "pathParameter": "organizationId"
         },
         "x-permissions": [
-          "task.create"
+          "task.create",
+          "task.assign"
         ]
       },
       "get": {
@@ -7241,6 +7272,24 @@
             "in": "query",
             "schema": {
               "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
+              "type": "string"
+            }
+          },
+          {
+            "name": "assignedTo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "milestoneId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
               "type": "string"
             }
           },
@@ -7634,7 +7683,7 @@
         ]
       },
       "patch": {
-        "description": "Updates title, description, priority, status, due date, team assignment and badge classification.",
+        "description": "Updates title, description, priority, status, due date, team assignment, badge classification, assignee and milestone.",
         "operationId": "TaskController_update",
         "parameters": [
           {
@@ -12664,6 +12713,11 @@
             "type": "string",
             "example": "Developer"
           },
+          "key": {
+            "type": "object",
+            "example": "developer",
+            "description": "Role template the role was created from; null for ad-hoc roles built with POST /roles"
+          },
           "description": {
             "type": "object",
             "example": "Creates and updates development work."
@@ -12884,6 +12938,14 @@
                 "task.create",
                 "task.update",
                 "task.delete",
+                "task.assign",
+                "milestone.view",
+                "milestone.create",
+                "milestone.update",
+                "milestone.delete",
+                "notification.view",
+                "notification.update",
+                "notification.delete",
                 "subtask.view",
                 "subtask.create",
                 "subtask.update",
@@ -12979,6 +13041,14 @@
                 "task.create",
                 "task.update",
                 "task.delete",
+                "task.assign",
+                "milestone.view",
+                "milestone.create",
+                "milestone.update",
+                "milestone.delete",
+                "notification.view",
+                "notification.update",
+                "notification.delete",
                 "subtask.view",
                 "subtask.create",
                 "subtask.update",
@@ -14274,6 +14344,16 @@
             "example": "4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b",
             "description": "Team of the same organization the task is assigned to"
           },
+          "assignedTo": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "description": "Assignee; must be an active member of the task's team. Requires the task to have a team."
+          },
+          "milestoneId": {
+            "type": "string",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "description": "Milestone of the same project/ organization the task is scheduled under"
+          },
           "badgeId": {
             "type": "string",
             "example": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
@@ -14330,6 +14410,16 @@
           "badgeId": {
             "type": "object",
             "example": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
+            "nullable": true
+          },
+          "assignedTo": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "nullable": true
+          },
+          "milestoneId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
             "nullable": true
           },
           "title": {
@@ -14441,6 +14531,16 @@
             "type": "object",
             "example": "4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b",
             "description": "Team of the same organization (null detaches the team)"
+          },
+          "assignedTo": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "description": "New assignee; must be an active member of the task's team (null unassigns)"
+          },
+          "milestoneId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "description": "Milestone of the same organization and project (null detaches it)"
           },
           "badgeId": {
             "type": "object",

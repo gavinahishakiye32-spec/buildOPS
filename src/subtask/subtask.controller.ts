@@ -108,6 +108,7 @@ export class SubtaskController {
     const subtask = await this.subtaskService.create(
       auth.organizationId,
       taskId,
+      auth.userId,
       dto,
     );
 
@@ -226,6 +227,7 @@ export class SubtaskController {
     const subtask = await this.subtaskService.update(
       auth.organizationId,
       subtaskId,
+      auth.userId,
       dto,
     );
 

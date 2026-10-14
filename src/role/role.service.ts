@@ -10,6 +10,7 @@ import { Membership, MembershipResolver } from '../common/membership.js';
 import {
   DEFAULT_ROLE_TEMPLATES,
   isPermissionName,
+  PERMISSIONS,
   ROLE_TEMPLATE_KEYS,
   type PermissionName,
   type RoleTemplate,
@@ -202,6 +203,7 @@ export class RoleService extends MembershipResolver {
         {
           name: template.name,
           description: template.description,
+          key: template.key,
           userId: user.id,
           permissions: template.permissions,
         },
@@ -215,7 +217,14 @@ export class RoleService extends MembershipResolver {
     organizationId: string,
     userId: string,
     roleId: string,
+    actorUserId: string,
   ): Promise<Role> {
+    if (userId === actorUserId) {
+      throw new BadRequestException(
+        'You cannot change your own role. Ask another administrator with the member.update permission to do it.',
+      );
+    }
+
     const target = await this.requireRoleInOrganization(organizationId, roleId);
     const current = await this.roleRepo.findOne({
       where: { organizationId, userId },
@@ -363,9 +372,23 @@ export class RoleService extends MembershipResolver {
     organizationId: string,
     roleId: string,
     dto: ReplacePermissionsDto,
+    actorUserId: string,
   ): Promise<Role> {
     const role = await this.findRole(organizationId, roleId);
     const permissions = this.validatePermissions(dto.permissions);
+
+    // A member editing their own role is the one edit that can strand the whole
+    // organization: dropping `role.update` from the role that grants it means
+    // nobody can restore the permission set from inside anymore. Refuse before
+    // anything is saved, so the refused role stays exactly as it was.
+    if (
+      role.userId === actorUserId &&
+      !permissions.includes(PERMISSIONS.ROLE_UPDATE)
+    ) {
+      throw new BadRequestException(
+        'You cannot remove the role.update permission from your own role. Ask another administrator to change it for you.',
+      );
+    }
 
     await this.replacePermissionRows(role, permissions);
 
@@ -412,8 +435,21 @@ export class RoleService extends MembershipResolver {
     });
   }
 
-  async unassignRole(organizationId: string, roleId: string): Promise<Role> {
+  async unassignRole(
+    organizationId: string,
+    roleId: string,
+    actorUserId: string,
+  ): Promise<Role> {
     const role = await this.findRole(organizationId, roleId);
+
+    // Mirror of the self-deactivation rule: unassigning the role that grants
+    // your own access locks you out, and the permission it takes to undo it is
+    // the one you are about to lose. Another administrator has to do it.
+    if (role.userId === actorUserId) {
+      throw new BadRequestException(
+        'You cannot unassign the role you currently hold. Ask another administrator to do it.',
+      );
+    }
 
     if (role.userId === null) {
       return role;
@@ -430,7 +466,18 @@ export class RoleService extends MembershipResolver {
   }
 
   async deleteRole(organizationId: string, roleId: string): Promise<void> {
-    await this.findRole(organizationId, roleId);
+    const role = await this.findRole(organizationId, roleId);
+
+    // A row with a `userId` is an assignment, not a definition: deleting it
+    // silently revokes a member (and deleting a role currently assigned to the
+    // caller is a self-lockout). The assignment and the definition are two
+    // steps by design, so the deletion asks for the unassignment first.
+    if (role.userId !== null) {
+      throw new BadRequestException(
+        'Role is assigned to a member. Unassign it before deleting it.',
+      );
+    }
+
     await this.roleRepo.delete(roleId);
   }
 
@@ -459,6 +506,7 @@ export class RoleService extends MembershipResolver {
       {
         name: owner.name,
         description: owner.description,
+        key: owner.key,
         userId,
         permissions: owner.permissions,
       },
@@ -474,6 +522,7 @@ export class RoleService extends MembershipResolver {
     input: {
       name: string;
       description: string;
+      key: string | null;
       userId: string;
       permissions: PermissionName[];
     },
@@ -494,6 +543,7 @@ export class RoleService extends MembershipResolver {
         organizationId,
         name: input.name,
         description: input.description,
+        key: input.key,
         userId: input.userId,
       }),
     );

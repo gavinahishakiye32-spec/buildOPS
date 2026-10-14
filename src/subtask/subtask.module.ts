@@ -4,6 +4,7 @@ import { Project } from '../project/project.entity.js';
 import { Task } from '../task/task.entity.js';
 import { TaskModule } from '../task/task.module.js';
 import { TeamModule } from '../team/team.module.js';
+import { NotificationModule } from '../notification/notification.module.js';
 import { SubtaskController } from './subtask.controller.js';
 import { Subtask } from './subtask.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
@@ -21,6 +22,8 @@ import { AuthModule } from '../auth/auth.module.js';
     // (and its existence proven) before a subtask is read or written.
     TaskModule,
     TeamModule,
+    // Assignment events go to the inbox; the subtask flow only ever writes.
+    NotificationModule,
   ],
   controllers: [SubtaskController],
   providers: [SubtaskService],

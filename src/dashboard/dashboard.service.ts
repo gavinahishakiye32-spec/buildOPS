@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Client } from '../client/client.entity.js';
+import { toIsoDate } from '../common/date.js';
 import { parseIntervalSeconds } from '../common/duration.js';
 import { Project } from '../project/project.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
@@ -140,8 +141,8 @@ export class DashboardService {
             sum + (snapshot.secondsBySubtask.get(subtaskId) ?? 0),
           0,
         ),
-        startDate: toDateOnly(project.startDate),
-        endDate: toDateOnly(project.endDate),
+        startDate: toIsoDate(project.startDate),
+        endDate: toIsoDate(project.endDate),
       };
     });
 
@@ -239,7 +240,7 @@ export class DashboardService {
 
     const items: OverdueSubtaskDto[] = subtasks.map((subtask) => {
       const dueDate = startOfDay(new Date(subtask.dueDate as Date));
-      const dueDateOnly = toDateOnly(subtask.dueDate) ?? '';
+      const dueDateOnly = toIsoDate(subtask.dueDate) ?? '';
 
       return {
         subtaskId: subtask.id,
@@ -549,16 +550,6 @@ function countBy<T>(items: T[], keyOf: (item: T) => string): StatusCountDto[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
     .map(([status, count]) => ({ status, count }));
-}
-
-function toDateOnly(date: Date | null | undefined): string | null {
-  if (!date) {
-    return null;
-  }
-  const value = new Date(date);
-  return Number.isNaN(value.getTime())
-    ? null
-    : value.toISOString().slice(0, 10);
 }
 
 function startOfDay(date: Date): Date {

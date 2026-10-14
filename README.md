@@ -8,7 +8,10 @@ NestJS + TypeORM backend powering BuildOps (multi-tenant project/task/time track
   (httpOnly cookie + CSRF double-submit, with per-device session list and "log out
 everywhere")
 - Multi-tenant model: Subscription → Organization → Users, Roles, Permissions
-- Resources: Clients, Projects, Teams, Badges, Tasks/Subtasks, Time Entries, Time Complexity, Dashboard
+- Resources: Clients, Projects, Teams, Badges, Tasks/Subtasks, Milestones, Time Entries, Time Complexity, Dashboard
+- In-app notifications as the "what's new" feed: targeted assignment/status events
+  plus lifecycle broadcasts (created/updated/deleted) delivered to owners and
+  project managers, with unread counts and read/read-all inbox routes
 - Soft delete with a trash and a restore route for every resource that can be
   deleted; cascading deletes are recoverable and report how many rows they took
 - Global validation, CORS, Helmet, rate limiting
@@ -40,7 +43,7 @@ Outside `NODE_ENV=production`, verification and reset flows do not need SMTP at 
 
 ## Architecture
 
-Domain modules under `src/` (feature-first): `auth`, `subscription`, `organization`, `role`, `team`, `client`, `project`, `badge`, `task`, `subtask`, `time-entry`, `time-complexity`, `dashboard`, `plan`, `user`, `mail`.
+Domain modules under `src/` (feature-first): `auth`, `subscription`, `organization`, `role`, `team`, `client`, `project`, `badge`, `task`, `subtask`, `milestone`, `notification`, `time-entry`, `time-complexity`, `dashboard`, `plan`, `user`, `mail`.
 Global guards: `ThrottlerGuard` (rate limiting). Org-scoped routes require `x-organization-id` or `:organizationId` param via `@Protected()`, permissions via `@RequirePermissions(...)`.
 
 ## Commands

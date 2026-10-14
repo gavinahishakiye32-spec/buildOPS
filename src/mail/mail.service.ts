@@ -92,6 +92,22 @@ export class MailService {
     });
   }
 
+  /**
+   * The realtime half of a notification: a plain read of the subscription, no
+   * link, because the row already landed in the in-app inbox and the email is
+   * only a nudge -- any context the reader wants is a click away in the app.
+   */
+  async sendNotificationEmail(
+    email: string,
+    input: { title: string; body: string },
+  ): Promise<void> {
+    await this.send({
+      to: email,
+      subject: input.title,
+      html: this.notificationTemplate(input),
+    });
+  }
+
   private get baseUrl(): string | undefined {
     return this.config.get<string>('APP_BASE_URL');
   }
@@ -328,6 +344,61 @@ export class MailService {
                 >
                   Or paste this link into your browser:<br/>
                   <span style="color:#4a4a5a;">${link}</span>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+  }
+
+  private notificationTemplate({
+    title,
+    body,
+  }: {
+    title: string;
+    body: string;
+  }): string {
+    return `<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; background:#f4f4f7; margin:0; padding:0;">
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="0"
+      style="background:#f4f4f7; padding:32px 0;"
+    >
+      <tr>
+        <td align="center">
+          <table
+            role="presentation"
+            width="480"
+            cellpadding="0"
+            cellspacing="0"
+            style="background:#ffffff; border-radius:8px; overflow:hidden; border:1px solid #e6e6eb;"
+          >
+            <tr>
+              <td style="padding:32px;">
+                <h2
+                  style="margin:0 0 16px; font-size:20px; color:#1a1a2e;"
+                >
+                  ${title}
+                </h2>
+
+                <p
+                  style="margin:0 0 24px; font-size:15px; color:#4a4a5a; line-height:1.5;"
+                >
+                  ${body}
+                </p>
+
+                <p
+                  style="margin:0; font-size:13px; color:#8a8a9a; line-height:1.5;"
+                >
+                  Open the app to see the full notification and its context.
                 </p>
               </td>
             </tr>

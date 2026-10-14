@@ -34,6 +34,24 @@ export class CreateTaskDto {
   teamId?: string;
 
   @ApiPropertyOptional({
+    example: '9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d',
+    description:
+      "Assignee; must be an active member of the task's team. Requires the task to have a team.",
+  })
+  @IsOptional()
+  @IsUUID()
+  assignedTo?: string;
+
+  @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    description:
+      'Milestone of the same project/ organization the task is scheduled under',
+  })
+  @IsOptional()
+  @IsUUID()
+  milestoneId?: string;
+
+  @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
     description:
       'Optional badge of the same organization (classification, spec §10)',
@@ -81,6 +99,22 @@ export class UpdateTaskDto {
   teamId?: string | null;
 
   @ApiPropertyOptional({
+    example: '9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d',
+    description:
+      "New assignee; must be an active member of the task's team (null unassigns)",
+  })
+  @IsOptional()
+  assignedTo?: string | null;
+
+  @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    description:
+      'Milestone of the same organization and project (null detaches it)',
+  })
+  @IsOptional()
+  milestoneId?: string | null;
+
+  @ApiPropertyOptional({
     example: '7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b',
     description:
       'Badge of the same organization (null clears the classification)',
@@ -123,6 +157,16 @@ export class TaskQueryDto extends PaginationQueryDto {
   @IsUUID()
   projectId?: string;
 
+  @ApiPropertyOptional({ example: '9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d' })
+  @IsOptional()
+  @IsUUID()
+  assignedTo?: string;
+
+  @ApiPropertyOptional({ example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6' })
+  @IsOptional()
+  @IsUUID()
+  milestoneId?: string;
+
   @ApiPropertyOptional({ example: '4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b' })
   @IsOptional()
   @IsUUID()
@@ -152,6 +196,18 @@ export class TaskResponseDto {
     nullable: true,
   })
   badgeId: string | null;
+
+  @ApiPropertyOptional({
+    example: '9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d',
+    nullable: true,
+  })
+  assignedTo: string | null;
+
+  @ApiPropertyOptional({
+    example: 'd1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6',
+    nullable: true,
+  })
+  milestoneId: string | null;
 
   @ApiProperty({ example: 'Implement invoicing endpoint' })
   title: string;

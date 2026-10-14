@@ -103,6 +103,7 @@ describe('SoftDeletePurgeService', () => {
         'time_entries',
         'subtasks',
         'tasks',
+        'milestones',
         'projects',
         'clients',
         'badges',

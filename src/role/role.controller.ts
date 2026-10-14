@@ -146,7 +146,7 @@ export class RoleController {
     status: 200,
     type: MemberResponseDto,
   })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404)
   async updateMember(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -156,6 +156,7 @@ export class RoleController {
       auth.organizationId,
       userId,
       dto.roleId as string,
+      auth.userId,
     );
     return this.roleService.member(auth.organizationId, userId);
   }
@@ -317,14 +318,17 @@ export class RoleController {
   @RequirePermissions(PERMISSIONS.ROLE_DELETE)
   @ApiOperation({
     summary: 'Delete a role',
-    description: 'Deletes the role and the permissions attached to it.',
+    description:
+      'Deletes an unassigned role and the permissions attached to it. A role ' +
+      'a member still holds is refused: unassign or repoint that member first, ' +
+      'so deleting a role cannot silently strip somebody of their access.',
   })
   @ApiResponse({
     description: 'Role deleted',
     status: 200,
     type: RoleMessageResponseDto,
   })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404)
   async deleteRole(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('roleId', ParseUUIDPipe) roleId: string,
@@ -356,6 +360,7 @@ export class RoleController {
       auth.organizationId,
       roleId,
       dto,
+      auth.userId,
     );
     return role.toResponseWithPermissions();
   }
@@ -400,7 +405,7 @@ export class RoleController {
     status: 200,
     type: RoleResponseDto,
   })
-  @ApiErrors(403, 404)
+  @ApiErrors(400, 403, 404)
   async unassignRole(
     @OrgAuth() auth: OrganizationAuthContext,
     @Param('roleId', ParseUUIDPipe) roleId: string,
@@ -408,6 +413,7 @@ export class RoleController {
     const role = await this.roleService.unassignRole(
       auth.organizationId,
       roleId,
+      auth.userId,
     );
     return role.toResponseWithPermissions();
   }

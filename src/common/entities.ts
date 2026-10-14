@@ -12,6 +12,8 @@ import { Client } from '../client/client.entity.js';
 import { Project } from '../project/project.entity.js';
 import { Task } from '../task/task.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
+import { Milestone } from '../milestone/milestone.entity.js';
+import { Notification } from '../notification/notification.entity.js';
 import { TimeEntry } from '../time-entry/time-entry.entity.js';
 import { TimeComplexity } from '../time-complexity/time-complexity.entity.js';
 import { RefreshToken } from '../auth/refresh-token.entity.js';
@@ -34,6 +36,8 @@ export const ENTITIES = [
   Project,
   Task,
   Subtask,
+  Milestone,
+  Notification,
   TimeEntry,
   TimeComplexity,
   RefreshToken,

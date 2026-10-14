@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -11,8 +12,10 @@ import {
   toPaginated,
   type Paginated,
 } from '../common/pagination.dto.js';
+import { toIsoDate } from '../common/date.js';
 import { Project } from '../project/project.entity.js';
 import { TeamService } from '../team/team.service.js';
+import { NotificationService } from '../notification/notification.service.js';
 import { Subtask } from './subtask.entity.js';
 import {
   CreateSubtaskDto,
@@ -34,6 +37,8 @@ import {
  */
 @Injectable()
 export class SubtaskService {
+  private readonly logger = new Logger(SubtaskService.name);
+
   constructor(
     @InjectRepository(Subtask)
     private readonly subtaskRepo: Repository<Subtask>,
@@ -42,6 +47,7 @@ export class SubtaskService {
     @InjectRepository(TimeEntry)
     private readonly timeEntryRepo: Repository<TimeEntry>,
     private readonly teamService: TeamService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async list(
@@ -91,13 +97,14 @@ export class SubtaskService {
   async create(
     organizationId: string,
     taskId: string,
+    actorId: string,
     dto: CreateSubtaskDto,
   ): Promise<Subtask> {
     const task = await this.requireTask(organizationId, taskId);
 
     const assignedTo = await this.resolveAssignee(task, dto.assignedTo);
 
-    return this.subtaskRepo.save(
+    const subtask = await this.subtaskRepo.save(
       this.subtaskRepo.create({
         taskId: task.id,
         assignedTo,
@@ -107,21 +114,49 @@ export class SubtaskService {
         dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
       }),
     );
+
+    if (assignedTo && assignedTo !== actorId) {
+      await this.notifyAssigned(organizationId, task, subtask, assignedTo, actorId);
+    }
+    await this.notifyBroadcast(
+      organizationId,
+      actorId,
+      'subtask.created',
+      `Subtask "${subtask.title}" created`,
+      `A new subtask "${subtask.title}" was added to "${task.title}".`,
+      { subtaskId: subtask.id, taskId: task.id, title: subtask.title },
+    );
+
+    return subtask;
   }
 
   async update(
     organizationId: string,
     subtaskId: string,
+    actorId: string,
     dto: UpdateSubtaskDto,
   ): Promise<Subtask> {
     const subtask = await this.findOne(organizationId, subtaskId);
 
     if (dto.assignedTo !== undefined) {
       const task = await this.requireTask(organizationId, subtask.taskId);
-      subtask.assignedTo = await this.resolveAssignee(
+      const assignedTo = await this.resolveAssignee(
         task,
         dto.assignedTo ?? undefined,
       );
+
+      if (subtask.assignedTo !== assignedTo) {
+        if (assignedTo && assignedTo !== actorId) {
+          await this.notifyAssigned(
+            organizationId,
+            task,
+            subtask,
+            assignedTo,
+            actorId,
+          );
+        }
+        subtask.assignedTo = assignedTo;
+      }
     }
     if (dto.title !== undefined) {
       subtask.title = dto.title.trim();
@@ -137,6 +172,14 @@ export class SubtaskService {
     }
 
     await this.subtaskRepo.save(subtask);
+    await this.notifyBroadcast(
+      organizationId,
+      actorId,
+      'subtask.updated',
+      `Subtask "${subtask.title}" updated`,
+      `Subtask "${subtask.title}" was changed.`,
+      { subtaskId: subtask.id, taskId: subtask.taskId, title: subtask.title },
+    );
     return this.findOne(organizationId, subtaskId);
   }
 
@@ -154,7 +197,7 @@ export class SubtaskService {
     actorId: string,
     confirmed: boolean,
   ): Promise<{ deleted: number }> {
-    await this.findOne(organizationId, subtaskId);
+    const subtask = await this.findOne(organizationId, subtaskId);
 
     if (!confirmed) {
       throw new ConflictException(CASCADE_CONFIRMATION_REQUIRED);
@@ -165,7 +208,7 @@ export class SubtaskService {
     // One transaction, one timestamp, deepest rows first. The timestamp is what
     // the restore keys off, and the transaction is what stops a failure between
     // the two statements from producing a subtask whose hours are already gone.
-    return this.subtaskRepo.manager.transaction(async (manager) => {
+    const result = await this.subtaskRepo.manager.transaction(async (manager) => {
       const subtaskRepo = manager.getRepository(Subtask);
       const timeEntryRepo = manager.getRepository(TimeEntry);
 
@@ -190,6 +233,17 @@ export class SubtaskService {
 
       return { deleted: entries + 1 };
     });
+
+    await this.notifyBroadcast(
+      organizationId,
+      actorId,
+      'subtask.deleted',
+      `Subtask "${subtask.title}" deleted`,
+      `Subtask "${subtask.title}" was deleted.`,
+      { subtaskId: subtask.id, taskId: subtask.taskId, title: subtask.title },
+    );
+
+    return result;
   }
 
   /**
@@ -400,5 +454,70 @@ export class SubtaskService {
 
     await this.teamService.assertActiveMember(task.teamId, assignedTo);
     return assignedTo;
+  }
+
+  /**
+   * Notifies a new subtask assignee, best-effort.
+   *
+   * The assignment is the operation the caller asked for; a notification row
+   * that fails to persist (or whose email fails -- that side is guarded inside
+   * `NotificationService`) must not roll the assignment back.
+   */
+  private async notifyAssigned(
+    organizationId: string,
+    task: Task,
+    subtask: Subtask,
+    assignee: string,
+    actorId: string,
+  ): Promise<void> {
+    try {
+      await this.notificationService.create(
+        organizationId,
+        assignee,
+        'subtask.assigned',
+        'You have been assigned a subtask',
+        `You have been assigned to "${subtask.title}" (in task "${task.title}").`,
+        {
+          subtaskId: subtask.id,
+          taskId: task.id,
+          title: subtask.title,
+          dueDate: toIsoDate(subtask.dueDate),
+        },
+        actorId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(
+        `Notification not delivered kind=subtask.assigned recipient=${assignee}: ${message}`,
+      );
+    }
+  }
+
+  /**
+   * Broadcasts a lifecycle event to the organization's owners and project
+   * managers, best-effort. The broadcast guards each recipient; this guard
+   * covers the audience lookup.
+   */
+  private async notifyBroadcast(
+    organizationId: string,
+    actorId: string,
+    kind: string,
+    title: string,
+    body: string,
+    data: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await this.notificationService.broadcast(
+        organizationId,
+        actorId,
+        kind,
+        title,
+        body,
+        data,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Broadcast not delivered kind=${kind}: ${message}`);
+    }
   }
 }
