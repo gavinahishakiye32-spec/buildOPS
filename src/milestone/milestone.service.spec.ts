@@ -133,10 +133,9 @@ describe('MilestoneService', () => {
       expect(notificationService.broadcast).toHaveBeenCalledWith(
         'org-1',
         'actor-1',
-        'milestone.created',
+        'milestone_created',
         expect.any(String),
         expect.any(String),
-        expect.objectContaining({ milestoneId: 'milestone-1' }),
       );
     });
   });
@@ -159,10 +158,9 @@ describe('MilestoneService', () => {
       expect(notificationService.broadcast).toHaveBeenCalledWith(
         'org-1',
         'actor-1',
-        'milestone.deleted',
+        'milestone_deleted',
         expect.any(String),
         expect.any(String),
-        expect.objectContaining({ milestoneId: 'milestone-1' }),
       );
     });
 
@@ -198,10 +196,9 @@ describe('MilestoneService', () => {
       expect(notificationService.broadcast).toHaveBeenCalledWith(
         'org-1',
         'actor-1',
-        'milestone.restored',
+        'milestone_restored',
         expect.any(String),
         expect.any(String),
-        expect.objectContaining({ milestoneId: 'milestone-1' }),
       );
     });
   });

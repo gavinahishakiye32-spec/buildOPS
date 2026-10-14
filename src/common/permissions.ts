@@ -35,7 +35,6 @@ export const PERMISSIONS = {
   TASK_CREATE: 'task.create',
   TASK_UPDATE: 'task.update',
   TASK_DELETE: 'task.delete',
-  TASK_ASSIGN: 'task.assign',
   MILESTONE_VIEW: 'milestone.view',
   MILESTONE_CREATE: 'milestone.create',
   MILESTONE_UPDATE: 'milestone.update',
@@ -113,7 +112,6 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       'task.create' as PermissionName,
       'task.update' as PermissionName,
       'task.delete' as PermissionName,
-      'task.assign' as PermissionName,
       'milestone.view' as PermissionName,
       'milestone.create' as PermissionName,
       'milestone.update' as PermissionName,
@@ -156,15 +154,14 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('project'),
       ...viewOnly('badge'),
       ...viewOnly('time_complexity'),
-      // Reading has to come before writing. `task.create` without
-      // `task.view` described a role that could add work to a board it was
-      // then forbidden to open -- and, with assignment in play, one that could
-      // hand out work while being unable to see who had taken it.
+      // Reading has to come before writing. `task.create` without `task.view`
+      // described a role that could add work to a board it was then forbidden
+      // to open, and `subtask.assign` without `subtask.view` one that could
+      // hand work out while unable to see who had taken it.
       ...viewOnly('task'),
       ...viewOnly('subtask'),
       PERMISSIONS.TASK_CREATE,
       PERMISSIONS.TASK_UPDATE,
-      PERMISSIONS.TASK_ASSIGN,
       PERMISSIONS.MILESTONE_VIEW,
       PERMISSIONS.SUBTASK_CREATE,
       PERMISSIONS.SUBTASK_UPDATE,

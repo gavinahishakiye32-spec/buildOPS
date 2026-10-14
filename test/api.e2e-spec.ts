@@ -840,7 +840,7 @@ describe('BuildOps operational flow (e2e)', () => {
         .expect(400);
     });
 
-    it('plans a milestone and assigns a task to a team member', async () => {
+    it('plans a milestone for a project', async () => {
       const milestone = await asOwner(request(server).post(api('/milestones')))
         .send({ projectId, name: 'MVP release', dueDate: '2026-11-01' })
         .expect(201);
@@ -866,109 +866,6 @@ describe('BuildOps operational flow (e2e)', () => {
       )
         .send({ status: 'in_progress' })
         .expect(200);
-
-      const assigned = await asOwner(
-        request(server).patch(api(`/tasks/${taskId}`)),
-      )
-        .send({ assignedTo: memberId })
-        .expect(200);
-      expect(assigned.body.assignedTo).toBe(memberId);
-
-      // The owner is not a member of the task's team, so the individual
-      // assignment is refused: it must be an active member of that team.
-      await asOwner(request(server).patch(api(`/tasks/${taskId}`)))
-        .send({ assignedTo: ownerId })
-        .expect(400);
-
-      const cleared = await asOwner(
-        request(server).patch(api(`/tasks/${taskId}`)),
-      )
-        .send({ assignedTo: null })
-        .expect(200);
-      expect(cleared.body.assignedTo).toBeNull();
-    });
-
-    it('delivers the assignment to the assignee inbox and lets them clear it', async () => {
-      // The custom Contributor role started empty; give it the inbox
-      // permissions a packaged role would carry.
-      await asOwner(
-        request(server).put(
-          api(`/organizations/${organizationId}/roles/${roleId}/permissions`),
-        ),
-      )
-        .send({
-          permissions: [
-            'task.view',
-            'notification.view',
-            'notification.update',
-            'notification.delete',
-          ],
-        })
-        .expect(200);
-
-      const inbox = await asMember(
-        request(server).get(api('/notifications')),
-      ).expect(200);
-      const assignment = inbox.body.items.find(
-        (notification: { kind: string }) =>
-          notification.kind === 'task.assigned',
-      );
-      expect(assignment).toBeDefined();
-      expect(assignment.readAt).toBeNull();
-
-      const unread = await asMember(
-        request(server).get(api('/notifications/unread-count')),
-      ).expect(200);
-      expect(unread.body.unread).toBeGreaterThanOrEqual(1);
-
-      const stillUnread = await asMember(
-        request(server).get(api('/notifications')),
-      )
-        .query({ unread: 'true' })
-        .expect(200);
-      expect(stillUnread.body.items).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: assignment.id }),
-        ]),
-      );
-
-      const read = await asMember(
-        request(server).post(
-          api(`/notifications/${assignment.id as string}/read`),
-        ),
-      ).expect(201);
-      expect(read.body.readAt).not.toBeNull();
-
-      // `unread` is parsed as a real boolean rather than coerced from the
-      // string: `true` now excludes the read row, and the documented `false`
-      // must not fall back to `true` and hide it again.
-      const onlyUnread = await asMember(
-        request(server).get(api('/notifications')),
-      )
-        .query({ unread: 'true' })
-        .expect(200);
-      expect(
-        onlyUnread.body.items.some(
-          (notification: { id: string }) => notification.id === assignment.id,
-        ),
-      ).toBe(false);
-
-      const all = await asMember(request(server).get(api('/notifications')))
-        .query({ unread: 'false' })
-        .expect(200);
-      expect(all.body.items).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: assignment.id }),
-        ]),
-      );
-
-      await asMember(request(server).post(api('/notifications/read-all')))
-        .send({})
-        .expect(201);
-
-      await asMember(
-        request(server).delete(api(`/notifications/${assignment.id as string}`)),
-      ).expect(200);
     });
   });
 

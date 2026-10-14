@@ -166,8 +166,6 @@ export class NotificationService {
    *
    * Like `notify`, this is best-effort and never throws into the caller; each
    * write is independently guarded, so one bad recipient cannot stop the rest.
-   * `data` is accepted for the caller's convenience and currently not persisted
-   * -- the notification table carries no payload column.
    */
   async broadcast(
     organizationId: string,
@@ -175,10 +173,7 @@ export class NotificationService {
     type: string,
     title: string,
     body?: string | null,
-    data?: Record<string, unknown>,
   ): Promise<number> {
-    void data;
-
     const roles = await this.roleRepo.find({
       where: { organizationId, status: 'active', userId: Not(IsNull()) },
       relations: { permissions: true },

@@ -5,7 +5,6 @@ import { Project } from '../project/project.entity.js';
 import { Team } from '../team/team.entity.js';
 import { TeamModule } from '../team/team.module.js';
 import { MilestoneModule } from '../milestone/milestone.module.js';
-import { NotificationModule } from '../notification/notification.module.js';
 import { TaskController } from './task.controller.js';
 import { Task } from './task.entity.js';
 import { Subtask } from '../subtask/subtask.entity.js';
@@ -22,11 +21,9 @@ import { AuthModule } from '../auth/auth.module.js';
     // rollup, not for reads.
     TypeOrmModule.forFeature([Task, Project, Team, Badge, Subtask, TimeEntry]),
     TeamModule,
-    // Assignment validation (active team member) and milestone resolution come
-    // from these two services; notifications are the persistence of the events
-    // the task flow raises.
+    // Milestone resolution (and its "same project" rule) lives with the
+    // milestone, not here.
     MilestoneModule,
-    NotificationModule,
   ],
   controllers: [TaskController],
   providers: [TaskService],

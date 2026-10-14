@@ -1752,6 +1752,16 @@
               }
             }
           },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Missing, invalid or expired access token",
             "content": {
@@ -2343,7 +2353,7 @@
         ]
       },
       "delete": {
-        "description": "Deletes the role and the permissions attached to it.",
+        "description": "Deletes an unassigned role and the permissions attached to it. A role a member still holds is refused: unassign or repoint that member first, so deleting a role cannot silently strip somebody of their access.",
         "operationId": "RoleController_deleteRole",
         "parameters": [
           {
@@ -2372,6 +2382,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleMessageResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             }
@@ -2720,6 +2740,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RoleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             }
@@ -7333,6 +7363,15 @@
             }
           },
           {
+            "name": "milestoneId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+              "type": "string"
+            }
+          },
+          {
             "name": "badgeId",
             "required": false,
             "in": "query",
@@ -7959,6 +7998,363 @@
         "x-permissions": [
           "task.delete"
         ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "description": "Your notifications in this organization, newest first. Only ever your own: the recipient is the authenticated caller, so there is no request that reaches another member's.",
+        "operationId": "NotificationController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List your notifications",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "description": "Drives the badge on the bell. Separate from the list so the header does not have to page the whole thing to render one number.",
+        "operationId": "NotificationController_unread",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "How many notifications you have not read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "description": "Clears the badge. Only unread rows are touched, so the timestamp on something read last month is not rewritten.",
+        "operationId": "NotificationController_readAll",
+        "parameters": [
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many were marked read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark every notification read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "post": {
+        "description": "Scoped to the caller as well as the id, so a notification id from somebody else answers 404 rather than clearing their badge.",
+        "operationId": "NotificationController_readOne",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The notification is now read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadResultDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found, or it belongs to another organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark one notification read",
+        "tags": [
+          "notifications"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        }
       }
     },
     "/tasks/{taskId}/subtasks": {
@@ -9052,363 +9448,6 @@
         "x-permissions": [
           "subtask.assign"
         ]
-      }
-    },
-    "/notifications": {
-      "get": {
-        "description": "Your notifications in this organization, newest first. Only ever your own: the recipient is the authenticated caller, so there is no request that reaches another member's.",
-        "operationId": "NotificationController_list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "description": "Page number (1-based)",
-            "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "number"
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "description": "Items per page",
-            "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "type": "number"
-            }
-          },
-          {
-            "name": "x-organization-id",
-            "in": "header",
-            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "One page of notifications",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/NotificationPage"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, invalid or expired access token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied, or you are not a member of the active organization",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "List your notifications",
-        "tags": [
-          "notifications"
-        ],
-        "x-auth": {
-          "required": true,
-          "scheme": "bearer",
-          "context": "organization"
-        },
-        "x-organization-context": {
-          "required": true,
-          "header": "x-organization-id",
-          "pathParameter": "organizationId"
-        }
-      }
-    },
-    "/notifications/unread-count": {
-      "get": {
-        "description": "Drives the badge on the bell. Separate from the list so the header does not have to page the whole thing to render one number.",
-        "operationId": "NotificationController_unread",
-        "parameters": [
-          {
-            "name": "x-organization-id",
-            "in": "header",
-            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The unread count",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UnreadCountDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, invalid or expired access token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied, or you are not a member of the active organization",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "How many notifications you have not read",
-        "tags": [
-          "notifications"
-        ],
-        "x-auth": {
-          "required": true,
-          "scheme": "bearer",
-          "context": "organization"
-        },
-        "x-organization-context": {
-          "required": true,
-          "header": "x-organization-id",
-          "pathParameter": "organizationId"
-        }
-      }
-    },
-    "/notifications/read-all": {
-      "post": {
-        "description": "Clears the badge. Only unread rows are touched, so the timestamp on something read last month is not rewritten.",
-        "operationId": "NotificationController_readAll",
-        "parameters": [
-          {
-            "name": "x-organization-id",
-            "in": "header",
-            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "How many were marked read",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, invalid or expired access token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied, or you are not a member of the active organization",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Mark every notification read",
-        "tags": [
-          "notifications"
-        ],
-        "x-auth": {
-          "required": true,
-          "scheme": "bearer",
-          "context": "organization"
-        },
-        "x-organization-context": {
-          "required": true,
-          "header": "x-organization-id",
-          "pathParameter": "organizationId"
-        }
-      }
-    },
-    "/notifications/{notificationId}/read": {
-      "post": {
-        "description": "Scoped to the caller as well as the id, so a notification id from somebody else answers 404 rather than clearing their badge.",
-        "operationId": "NotificationController_readOne",
-        "parameters": [
-          {
-            "name": "notificationId",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "x-organization-id",
-            "in": "header",
-            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The notification is now read",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadResultDto"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing, invalid or expired access token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied, or you are not a member of the active organization",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found, or it belongs to another organization",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Mark one notification read",
-        "tags": [
-          "notifications"
-        ],
-        "x-auth": {
-          "required": true,
-          "scheme": "bearer",
-          "context": "organization"
-        },
-        "x-organization-context": {
-          "required": true,
-          "header": "x-organization-id",
-          "pathParameter": "organizationId"
-        }
       }
     },
     "/time-entries": {
@@ -13389,6 +13428,11 @@
             "type": "string",
             "example": "Developer"
           },
+          "key": {
+            "type": "object",
+            "example": "developer",
+            "description": "Role template the role was created from; null for ad-hoc roles built with POST /roles"
+          },
           "description": {
             "type": "object",
             "example": "Creates and updates development work."
@@ -13609,6 +13653,13 @@
                 "task.create",
                 "task.update",
                 "task.delete",
+                "milestone.view",
+                "milestone.create",
+                "milestone.update",
+                "milestone.delete",
+                "notification.view",
+                "notification.update",
+                "notification.delete",
                 "subtask.view",
                 "subtask.create",
                 "subtask.update",
@@ -13704,6 +13755,13 @@
                 "task.create",
                 "task.update",
                 "task.delete",
+                "milestone.view",
+                "milestone.create",
+                "milestone.update",
+                "milestone.delete",
+                "notification.view",
+                "notification.update",
+                "notification.delete",
                 "subtask.view",
                 "subtask.create",
                 "subtask.update",
@@ -15060,6 +15118,11 @@
             "example": "4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b",
             "description": "Team of the same organization the task is assigned to"
           },
+          "milestoneId": {
+            "type": "string",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "description": "Milestone of the same project the task is scheduled under"
+          },
           "badgeId": {
             "type": "string",
             "example": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
@@ -15133,6 +15196,11 @@
           "badgeId": {
             "type": "object",
             "example": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
+            "nullable": true
+          },
+          "milestoneId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
             "nullable": true
           },
           "title": {
@@ -15265,6 +15333,11 @@
             "example": "4c1f5c66-2f9e-4f5c-8b2a-9c0d1e2f3a4b",
             "description": "Team of the same organization (null detaches the team)"
           },
+          "milestoneId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "description": "Milestone of the same project (null detaches it)"
+          },
           "badgeId": {
             "type": "object",
             "example": "7e8f9a0b-1c2d-4e3f-8a4b-5c6d7e8f9a0b",
@@ -15311,6 +15384,160 @@
         },
         "required": [
           "message"
+        ]
+      },
+      "NotificationActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "name": {
+            "type": "object",
+            "example": "Ada Login",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id"
+        ]
+      },
+      "NotificationResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "subtask_assigned",
+              "subtask_reassigned",
+              "milestone_created",
+              "milestone_updated",
+              "milestone_deleted",
+              "milestone_restored"
+            ],
+            "example": "subtask_assigned"
+          },
+          "title": {
+            "type": "string",
+            "example": "Ada Login assigned you \"Build the login form\""
+          },
+          "body": {
+            "type": "object",
+            "example": "A subtask of \"Authentication\" in Acme Delivery.",
+            "nullable": true
+          },
+          "taskId": {
+            "type": "object",
+            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
+            "nullable": true,
+            "description": "The task, for a deep link. Null once that task is deleted."
+          },
+          "subtaskId": {
+            "type": "object",
+            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
+            "nullable": true,
+            "description": "The subtask, for a deep link."
+          },
+          "actor": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationActorDto"
+              }
+            ]
+          },
+          "readAt": {
+            "type": "object",
+            "example": null,
+            "nullable": true,
+            "description": "When it was read. Null is what the unread badge counts."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2026-09-30T10:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "createdAt"
+        ]
+      },
+      "NotificationPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Records of the current page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Total matching records"
+          },
+          "page": {
+            "type": "number",
+            "example": 1,
+            "description": "Current page (1-based)"
+          },
+          "limit": {
+            "type": "number",
+            "example": 20,
+            "description": "Items per page"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3,
+            "description": "Total number of pages"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
+        ]
+      },
+      "UnreadCountDto": {
+        "type": "object",
+        "properties": {
+          "unread": {
+            "type": "number",
+            "example": 3,
+            "description": "Notifications the caller has not read."
+          }
+        },
+        "required": [
+          "unread"
+        ]
+      },
+      "ReadResultDto": {
+        "type": "object",
+        "properties": {
+          "updated": {
+            "type": "number",
+            "example": 1
+          },
+          "read": {
+            "type": "boolean",
+            "example": true,
+            "description": "Present on the single-notification route; whether it was the caller’s."
+          }
+        },
+        "required": [
+          "updated"
         ]
       },
       "SubtaskResponseDto": {
@@ -15714,158 +15941,6 @@
         "required": [
           "id",
           "email"
-        ]
-      },
-      "NotificationActorDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
-          },
-          "name": {
-            "type": "object",
-            "example": "Ada Login",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id"
-        ]
-      },
-      "NotificationResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "a2b3c4d5-6e7f-4a8b-9c0d-1e2f3a4b5c6d"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "subtask_assigned",
-              "subtask_reassigned",
-              "subtask_completed",
-              "task_assigned"
-            ],
-            "example": "subtask_assigned"
-          },
-          "title": {
-            "type": "string",
-            "example": "Ada Login assigned you \"Build the login form\""
-          },
-          "body": {
-            "type": "object",
-            "example": "A subtask of \"Authentication\" in Acme Delivery.",
-            "nullable": true
-          },
-          "taskId": {
-            "type": "object",
-            "example": "d1e2f3a4-5b6c-4d7e-8f90-a1b2c3d4e5f6",
-            "nullable": true,
-            "description": "The task, for a deep link. Null once that task is deleted."
-          },
-          "subtaskId": {
-            "type": "object",
-            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
-            "nullable": true,
-            "description": "The subtask, for a deep link."
-          },
-          "actor": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NotificationActorDto"
-              }
-            ]
-          },
-          "readAt": {
-            "type": "object",
-            "example": null,
-            "nullable": true,
-            "description": "When it was read. Null is what the unread badge counts."
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "example": "2026-09-30T10:00:00.000Z"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "title",
-          "createdAt"
-        ]
-      },
-      "NotificationPage": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "description": "Records of the current page",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NotificationResponseDto"
-            }
-          },
-          "total": {
-            "type": "number",
-            "example": 42,
-            "description": "Total matching records"
-          },
-          "page": {
-            "type": "number",
-            "example": 1,
-            "description": "Current page (1-based)"
-          },
-          "limit": {
-            "type": "number",
-            "example": 20,
-            "description": "Items per page"
-          },
-          "totalPages": {
-            "type": "number",
-            "example": 3,
-            "description": "Total number of pages"
-          }
-        },
-        "required": [
-          "items",
-          "total",
-          "page",
-          "limit",
-          "totalPages"
-        ]
-      },
-      "UnreadCountDto": {
-        "type": "object",
-        "properties": {
-          "unread": {
-            "type": "number",
-            "example": 3,
-            "description": "Notifications the caller has not read."
-          }
-        },
-        "required": [
-          "unread"
-        ]
-      },
-      "ReadResultDto": {
-        "type": "object",
-        "properties": {
-          "updated": {
-            "type": "number",
-            "example": 1
-          },
-          "read": {
-            "type": "boolean",
-            "example": true,
-            "description": "Present on the single-notification route; whether it was the caller’s."
-          }
-        },
-        "required": [
-          "updated"
         ]
       },
       "CreateTimeEntryDto": {

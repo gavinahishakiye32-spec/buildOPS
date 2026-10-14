@@ -16,8 +16,10 @@ import { User } from '../user/user.entity.js';
 export const NOTIFICATION_TYPES = [
   'subtask_assigned',
   'subtask_reassigned',
-  'subtask_completed',
-  'task_assigned',
+  'milestone_created',
+  'milestone_updated',
+  'milestone_deleted',
+  'milestone_restored',
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

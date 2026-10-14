@@ -105,15 +105,9 @@ export class MilestoneService {
     await this.notifyBroadcast(
       organizationId,
       actorId,
-      'milestone.created',
+      'milestone_created',
       `Milestone "${milestone.name}" created`,
       `A new milestone "${milestone.name}" was added to the project.`,
-      {
-        milestoneId: milestone.id,
-        projectId: milestone.projectId,
-        name: milestone.name,
-        status: milestone.status,
-      },
     );
 
     return milestone;
@@ -145,15 +139,9 @@ export class MilestoneService {
     await this.notifyBroadcast(
       organizationId,
       actorId,
-      'milestone.updated',
+      'milestone_updated',
       `Milestone "${milestone.name}" updated`,
       `Milestone "${milestone.name}" was changed.`,
-      {
-        milestoneId: milestone.id,
-        projectId: milestone.projectId,
-        name: milestone.name,
-        status: milestone.status,
-      },
     );
 
     return this.findOne(organizationId, milestoneId);
@@ -205,15 +193,9 @@ export class MilestoneService {
     await this.notifyBroadcast(
       organizationId,
       actorId,
-      'milestone.deleted',
+      'milestone_deleted',
       `Milestone "${milestone.name}" deleted`,
       `Milestone "${milestone.name}" was deleted.`,
-      {
-        milestoneId: milestone.id,
-        projectId: milestone.projectId,
-        name: milestone.name,
-        status: milestone.status,
-      },
     );
 
     return result;
@@ -263,15 +245,9 @@ export class MilestoneService {
     await this.notifyBroadcast(
       organizationId,
       actorId,
-      'milestone.restored',
+      'milestone_restored',
       `Milestone "${restored.name}" restored`,
       `Milestone "${restored.name}" was brought back from the trash.`,
-      {
-        milestoneId: restored.id,
-        projectId: restored.projectId,
-        name: restored.name,
-        status: restored.status,
-      },
     );
 
     return restored;
@@ -319,7 +295,6 @@ export class MilestoneService {
     kind: string,
     title: string,
     body: string,
-    data: Record<string, unknown>,
   ): Promise<void> {
     try {
       await this.notificationService.broadcast(
@@ -328,7 +303,6 @@ export class MilestoneService {
         kind,
         title,
         body,
-        data,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

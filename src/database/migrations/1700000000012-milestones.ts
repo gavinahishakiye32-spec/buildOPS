@@ -79,7 +79,6 @@ export class Milestones1700000000012 implements MigrationInterface {
           ('Owner',             'milestone.create',      'create milestone'),
           ('Owner',             'milestone.update',      'update milestone'),
           ('Owner',             'milestone.delete',      'delete milestone'),
-          ('Owner',             'task.assign',           'assign task'),
           ('Owner',             'notification.view',     'view notification'),
           ('Owner',             'notification.update',   'update notification'),
           ('Owner',             'notification.delete',   'delete notification'),
@@ -87,12 +86,10 @@ export class Milestones1700000000012 implements MigrationInterface {
           ('Project Manager',   'milestone.create',      'create milestone'),
           ('Project Manager',   'milestone.update',      'update milestone'),
           ('Project Manager',   'milestone.delete',      'delete milestone'),
-          ('Project Manager',   'task.assign',           'assign task'),
           ('Project Manager',   'notification.view',     'view notification'),
           ('Project Manager',   'notification.update',   'update notification'),
           ('Project Manager',   'notification.delete',   'delete notification'),
           ('Developer',         'milestone.view',        'view milestone'),
-          ('Developer',         'task.assign',           'assign task'),
           ('Developer',         'notification.view',     'view notification'),
           ('Developer',         'notification.update',   'update notification'),
           ('Developer',         'notification.delete',   'delete notification'),
@@ -120,7 +117,7 @@ export class Milestones1700000000012 implements MigrationInterface {
       DELETE FROM "permissions"
       WHERE "name" IN (
         'milestone.view', 'milestone.create', 'milestone.update',
-        'milestone.delete', 'task.assign', 'notification.view',
+        'milestone.delete', 'notification.view',
         'notification.update', 'notification.delete'
       )
       AND "role_id" IN (
