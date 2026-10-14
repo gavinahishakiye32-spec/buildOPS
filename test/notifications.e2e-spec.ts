@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { API_PREFIX, configureApp } from '../src/bootstrap.js';
 import { MailService } from '../src/mail/mail.service.js';
+import { NotificationEmailService } from '../src/notification/notification-email.service.js';
 import { User } from '../src/user/user.entity.js';
 import { resetDatabase } from './support/reset-database.js';
 
@@ -27,9 +28,28 @@ describe('notifications (e2e)', () => {
   let app: INestApplication;
   let server: ReturnType<INestApplication['getHttpServer']>;
   let dataSource: DataSource;
+  let emailService: NotificationEmailService;
   let throttleStorage: { storage: Map<string, unknown>; hitExpirations: Map<string, unknown> };
 
   const mailTokens: { verify?: string } = {};
+
+  /** Every notification email the service tried to send, in order. */
+  const notificationEmails: {
+    to: string;
+    title: string;
+    body: string;
+    link?: string;
+  }[] = [];
+
+  /**
+   * Queued emails are only *sent* when the outbox is drained. The worker is
+   * disabled in tests, so each assertion drains explicitly -- which also keeps
+   * the test asserting the durable row was written, not that a send happened to
+   * win a race with the request.
+   */
+  const flushEmails = async (): Promise<void> => {
+    await emailService.deliverDue(1000);
+  };
 
   const ownerTokens: string[] = [];
   const adaTokens: string[] = [];
@@ -99,6 +119,12 @@ describe('notifications (e2e)', () => {
         },
         sendResetPasswordEmail: async () => undefined,
         sendInvitationEmail: async () => undefined,
+        sendNotificationEmail: async (
+          to: string,
+          input: { title: string; body: string; link?: string },
+        ) => {
+          notificationEmails.push({ to, ...input });
+        },
       })
       .compile();
 
@@ -107,6 +133,7 @@ describe('notifications (e2e)', () => {
 
     server = app.getHttpServer();
     dataSource = app.get(DataSource);
+    emailService = app.get(NotificationEmailService);
     throttleStorage = app.get(ThrottlerStorage) as unknown as {
       storage: Map<string, unknown>;
       hitExpirations: Map<string, unknown>;
@@ -225,6 +252,26 @@ describe('notifications (e2e)', () => {
     const owner = await asOwner(request(server).get(api('/notifications')))
       .expect(200);
     expect(owner.body.total).toBe(0);
+
+    // The assignment also queued exactly one email, in the same transaction as
+    // the row above -- the outbox holds what has to go out.
+    const queued = await dataSource.query(
+      `SELECT to_email FROM notification_emails WHERE status = 'pending'`,
+    );
+    expect(queued.map((row: { to_email: string }) => row.to_email)).toEqual([
+      'ada@example.com',
+    ]);
+
+    // The in-app row is only half of "notified": the same assignment has to
+    // reach the assignee's inbox, addressed to them and to nobody else.
+    await flushEmails();
+    expect(notificationEmails.map((email) => email.to)).toEqual([
+      'ada@example.com',
+    ]);
+    expect(notificationEmails[0].title).toContain('Build the login form');
+    expect(notificationEmails[0].body).toContain('Authentication rework');
+    // ...and the email is not a dead end: it points back at the subtask.
+    expect(notificationEmails[0].link).toContain(`/subtasks/${subtaskId}`);
   });
 
   it('counts unread for the badge', async () => {
@@ -250,6 +297,14 @@ describe('notifications (e2e)', () => {
     const rex = await storedFor(rexIds[0]);
     expect(rex).toHaveLength(1);
     expect(rex[0].type).toBe('subtask_reassigned');
+
+    // Reassigning emails only the new holder: Ada got her one email when the
+    // work came to her, and is not told a second time when it leaves.
+    await flushEmails();
+    expect(notificationEmails.map((email) => email.to)).toEqual([
+      'ada@example.com',
+      'rex@example.com',
+    ]);
   });
 
   it('does not notify anybody when the assignment is unchanged', async () => {
@@ -263,6 +318,9 @@ describe('notifications (e2e)', () => {
 
     expect(await storedFor(rexIds[0])).toHaveLength(1);
     expect(await storedFor(adaIds[0])).toHaveLength(1);
+    // Editing a title is not an assignment, so no inbox was nudged either.
+    await flushEmails();
+    expect(notificationEmails).toHaveLength(2);
   });
 
   it('does not notify a member about work assigned to themselves', async () => {
@@ -273,6 +331,9 @@ describe('notifications (e2e)', () => {
       .expect(201);
 
     expect(await storedFor(adaIds[0])).toHaveLength(1);
+    // Assigning work to yourself is not news to yourself, by email least of all.
+    await flushEmails();
+    expect(notificationEmails).toHaveLength(2);
   });
 
   it('marks one notification read, and only that one', async () => {

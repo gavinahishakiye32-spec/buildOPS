@@ -112,6 +112,7 @@ describe('Task and subtask assignment (e2e)', () => {
           mailTokens.invitation = token;
         },
         sendResetPasswordEmail: async () => undefined,
+        sendNotificationEmail: async () => undefined,
       })
       .compile();
 

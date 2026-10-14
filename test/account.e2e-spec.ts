@@ -121,6 +121,7 @@ describe('account (e2e)', () => {
         sendResetPasswordEmail: async (_email: string, token: string) => {
           mail.reset = token;
         },
+        sendNotificationEmail: async () => undefined,
       })
       .compile();
 

@@ -130,6 +130,7 @@ describe('BuildOps operational flow (e2e)', () => {
         sendInvitationEmail: async (_email: string, token: string) => {
           mailTokens.invitation = token;
         },
+        sendNotificationEmail: async () => undefined,
       })
       .compile();
 

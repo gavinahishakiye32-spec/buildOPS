@@ -155,6 +155,7 @@ describe('billing gate (e2e)', () => {
           mailTokens.verify = token;
         },
         sendResetPasswordEmail: async () => undefined,
+        sendNotificationEmail: async () => undefined,
       })
       .overrideProvider(BILLING_PROVIDER)
       .useValue(billing)

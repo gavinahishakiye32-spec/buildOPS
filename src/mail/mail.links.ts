@@ -41,3 +41,35 @@ export function buildEmailLink(
   const base = (origin ?? DEFAULT_APP_BASE_URL).replace(/\/+$/, '');
   return `${base}/${API_PREFIX}/${PATH_BY_KIND[kind]}?token=${token}`;
 }
+
+/** Where a notification's deep link should point, when it points anywhere. */
+export interface NotificationLinkTarget {
+  taskId?: string | null;
+  subtaskId?: string | null;
+}
+
+/**
+ * A deep link from a notification email into the app, or `undefined` when the
+ * notification is not about a specific piece of work.
+ *
+ * `origin` is `APP_BASE_URL`, which `.env.example` points at the frontend, so
+ * the path here is the *app's* route (not an API route) -- the recipient of
+ * "Ada assigned you ..." should land on the task, not on JSON. The subtask is
+ * the more specific target and is preferred when both are present.
+ */
+export function buildNotificationLink(
+  origin: string | undefined | null,
+  target: NotificationLinkTarget,
+): string | undefined {
+  const base = (origin ?? DEFAULT_APP_BASE_URL).replace(/\/+$/, '');
+
+  if (target.subtaskId) {
+    return `${base}/subtasks/${target.subtaskId}`;
+  }
+
+  if (target.taskId) {
+    return `${base}/tasks/${target.taskId}`;
+  }
+
+  return undefined;
+}

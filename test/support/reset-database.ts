@@ -19,6 +19,7 @@ const TABLES = [
   'organization_settings',
   'user_settings',
   'refresh_tokens',
+  'notification_emails',
   'notifications',
   'time_entries',
   'time_complexity',

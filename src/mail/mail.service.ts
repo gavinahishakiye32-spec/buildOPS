@@ -93,13 +93,17 @@ export class MailService {
   }
 
   /**
-   * The realtime half of a notification: a plain read of the subscription, no
-   * link, because the row already landed in the in-app inbox and the email is
-   * only a nudge -- any context the reader wants is a click away in the app.
+   * The email half of a notification: the same title and body the in-app row
+   * carries, plus a deep link to the thing it is about when there is one.
+   *
+   * The link matters. Without it this is a dead-end nudge -- the reader is told
+   * "Ada assigned you 'Build the login form'" and given no way to act on it
+   * from their inbox. The in-app row remains the source of truth; this is sent
+   * to point back at it.
    */
   async sendNotificationEmail(
     email: string,
-    input: { title: string; body: string },
+    input: { title: string; body: string; link?: string },
   ): Promise<void> {
     await this.send({
       to: email,
@@ -358,10 +362,24 @@ export class MailService {
   private notificationTemplate({
     title,
     body,
+    link,
   }: {
     title: string;
     body: string;
+    link?: string;
   }): string {
+    const button = link
+      ? `
+                <p style="margin:0 0 24px;">
+                  <a
+                    href="${link}"
+                    style="display:inline-block; background:#4f46e5; color:#ffffff; text-decoration:none; font-size:15px; padding:12px 20px; border-radius:6px;"
+                  >
+                    Open in the app
+                  </a>
+                </p>`
+      : '';
+
     return `<!doctype html>
 <html>
   <body style="font-family: Arial, sans-serif; background:#f4f4f7; margin:0; padding:0;">
@@ -393,7 +411,7 @@ export class MailService {
                   style="margin:0 0 24px; font-size:15px; color:#4a4a5a; line-height:1.5;"
                 >
                   ${body}
-                </p>
+                </p>${button}
 
                 <p
                   style="margin:0; font-size:13px; color:#8a8a9a; line-height:1.5;"

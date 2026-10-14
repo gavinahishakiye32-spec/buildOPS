@@ -353,6 +353,7 @@ describe('published contract vs runtime (e2e)', () => {
         sendInvitationEmail: async (_email: string, token: string) => {
           mail.invitation = token;
         },
+        sendNotificationEmail: async () => undefined,
       })
       .compile();
 

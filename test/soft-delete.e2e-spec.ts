@@ -149,6 +149,7 @@ describe('Safe deletion (e2e)', () => {
           mailTokens.verify = token;
         },
         sendResetPasswordEmail: async () => undefined,
+        sendNotificationEmail: async () => undefined,
       })
       .compile();
 

@@ -67,3 +67,13 @@ if (testDatabase !== target) {
 
   process.env.DB_DATABASE = testDatabase;
 }
+
+// The notification-email worker polls on a timer, which makes a suite's
+// assertions race a background job that can fire at any moment -- draining the
+// outbox mid-test and marking rows `sent` before the test can inspect their
+// pending state. Disabled here so each suite drives delivery explicitly with
+// `NotificationEmailService.deliverDue()`. Set before settling on a default so
+// an operator running tests against other settings still has them honoured.
+if (process.env.NOTIFICATION_EMAIL_INTERVAL_MS === undefined) {
+  process.env.NOTIFICATION_EMAIL_INTERVAL_MS = '0';
+}
