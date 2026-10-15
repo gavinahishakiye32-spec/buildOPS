@@ -15,6 +15,7 @@ import { PlanModule } from './plan/plan.module.js';
 import { PlanLimitModule } from './plan-limit/plan-limit.module.js';
 import { SubscriptionModule } from './subscription/subscription.module.js';
 import { BillingModule } from './billing/billing.module.js';
+import { BillingWebhookModule } from './billing/billing-webhook.module.js';
 
 import { OrganizationModule } from './organization/organization.module.js';
 import { RoleModule } from './role/role.module.js';
@@ -97,6 +98,10 @@ import { SettingsModule } from './settings/settings.module.js';
     }),
     AuthModule,
     BillingModule,
+    // The webhook route wires the provider's settlement back into the
+    // subscription, so it gets its own module rather than a circular import
+    // between the two.
+    BillingWebhookModule,
     PlanModule,
     PlanLimitModule,
     SubscriptionModule,

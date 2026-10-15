@@ -270,6 +270,11 @@ export class SubscriptionService {
    * (the stub) or later on a webhook. Reactivating a subscription clears
    * `trialEndsAt`: a trial and a paid agreement are not both true at once, and
    * leaving the old date behind would eventually lapse a paying customer.
+   *
+   * `subscriptionRef` is assigned rather than merged: the provider's answer
+   * describes the agreement state in full, and keeping a stale handle from an
+   * earlier plan would leave the next cancellation cancelling a subscription
+   * the customer no longer has.
    */
   private async applyPaidPlan(
     subscription: Subscription,
@@ -284,9 +289,7 @@ export class SubscriptionService {
     subscription.pendingPlanId = null;
     subscription.pendingPlanReference = null;
     subscription.pendingPlan = null;
-    if (subscriptionRef) {
-      subscription.billingSubscriptionRef = subscriptionRef;
-    }
+    subscription.billingSubscriptionRef = subscriptionRef;
 
     await manager.getRepository(Subscription).save(subscription);
   }
@@ -373,7 +376,11 @@ export class SubscriptionService {
     }
 
     const plan = await this.planService.requireById(confirmed.planId);
-    await this.applyPaidPlan(subscription, plan, null);
+    await this.applyPaidPlan(
+      subscription,
+      plan,
+      confirmed.subscriptionRef ?? null,
+    );
 
     return {
       subscription,

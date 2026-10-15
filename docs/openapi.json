@@ -698,21 +698,36 @@
         }
       }
     },
-    "/plans": {
-      "get": {
-        "description": "Public catalogue of subscription plans and their capacity limits (max_users, max_projects, max_storage_gb, max_organizations, price).",
-        "operationId": "PlanController_findAll",
+    "/billing/webhook": {
+      "post": {
+        "description": "Verifies the Stripe-Signature header against the raw request body using STRIPE_WEBHOOK_SECRET, then settles the purchase the event names. A signed delivery for an unknown or unpaid checkout session is acknowledged with 200 and changes nothing; an unsigned, badly signed or unverifiable delivery is rejected with 400. Returns 429 under the same rate limit as the rest of the API.",
+        "operationId": "BillingWebhookController_receive",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Available plans",
+            "description": "Delivery acknowledged. The plan is applied only when the event settled a purchase this application is waiting on.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PlanResponseDto"
-                  }
+                  "type": "object",
+                  "properties": {
+                    "received": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "received"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
                 }
               }
             }
@@ -728,9 +743,9 @@
             }
           }
         },
-        "summary": "List plans",
+        "summary": "Receive a Stripe webhook",
         "tags": [
-          "plans"
+          "billing"
         ]
       }
     },
@@ -2816,6 +2831,42 @@
         },
         "x-permissions": [
           "role.assign"
+        ]
+      }
+    },
+    "/plans": {
+      "get": {
+        "description": "Public catalogue of subscription plans and their capacity limits (max_users, max_projects, max_storage_gb, max_organizations, price).",
+        "operationId": "PlanController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Available plans",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlanResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List plans",
+        "tags": [
+          "plans"
         ]
       }
     },
@@ -12609,6 +12660,10 @@
       "description": "The subscription of the authenticated user: plan, status and usage"
     },
     {
+      "name": "billing",
+      "description": "Payment provider integration: plan purchases and the verified Stripe webhook"
+    },
+    {
       "name": "organizations",
       "description": "Organization CRUD within the subscription"
     },
@@ -13007,6 +13062,28 @@
           }
         }
       },
+      "SelectPlanDto": {
+        "type": "object",
+        "properties": {
+          "planId": {
+            "type": "string",
+            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
+            "description": "Identifier of the selected plan (see GET /plans)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "trial",
+              "active"
+            ],
+            "default": "active",
+            "description": "Subscription status. \"trial\" starts a trial subscription; \"active\" activates immediately. A client cannot subscribe straight into a cancelled or suspended state."
+          }
+        },
+        "required": [
+          "planId"
+        ]
+      },
       "PlanResponseDto": {
         "type": "object",
         "properties": {
@@ -13056,28 +13133,6 @@
           "maxStorageGb",
           "maxOrganizations",
           "price"
-        ]
-      },
-      "SelectPlanDto": {
-        "type": "object",
-        "properties": {
-          "planId": {
-            "type": "string",
-            "example": "b6f0e2a1-9f2a-4a6f-8f1e-2c9a5b7d1e33",
-            "description": "Identifier of the selected plan (see GET /plans)"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "trial",
-              "active"
-            ],
-            "default": "active",
-            "description": "Subscription status. \"trial\" starts a trial subscription; \"active\" activates immediately. A client cannot subscribe straight into a cancelled or suspended state."
-          }
-        },
-        "required": [
-          "planId"
         ]
       },
       "SubscriptionResponseDto": {

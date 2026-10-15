@@ -61,8 +61,10 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['GET', '/auth/sessions', ['200']],
   ['GET', '/auth/profile', ['200']],
   ['PATCH', '/auth/profile', ['200']],
-  // Billing: the catalogue is public, everything else needs a token.
+  // Billing: the catalogue is public, everything else needs a token -- except
+  // the webhook, whose caller is Stripe and whose signature is its credential.
   ['GET', '/plans', ['200']],
+  ['POST', '/billing/webhook', ['200']],
   // 200 when the payment settles (the plan is in force), 202 when a checkout
   // has to be completed before it applies.
   ['POST', '/subscription', ['200', '202']],
@@ -241,6 +243,7 @@ const PUBLIC_OPERATIONS = [
   'GET /invitations/accept',
   'POST /invitations/accept',
   'GET /plans',
+  'POST /billing/webhook',
 ];
 
 describe('OpenAPI document (e2e)', () => {

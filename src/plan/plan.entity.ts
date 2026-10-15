@@ -34,8 +34,11 @@ export class Plan {
 
   /**
    * Identifier of this plan's recurring price inside the payment provider
-   * (a Stripe price id, a Paddle plan id). Null until a real provider is wired
-   * up.
+   * (a Stripe price id, a Paddle plan id). Null until a provider has sold the
+   * plan once: `StripeBillingProvider` provisions the product and price from
+   * this row on the first purchase and writes the id back here, so the column
+   * records what actually exists at the payment provider rather than a value
+   * somebody had to keep in sync by hand.
    *
    * The provider is the authority on the amount: a purchase carries this
    * reference, never the `price` column, because a price supplied by the client

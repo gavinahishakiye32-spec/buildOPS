@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ThrottlerStorage } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { jest } from '@jest/globals';
 import request from 'supertest';
@@ -186,14 +187,20 @@ describe('billing gate (e2e)', () => {
     //
     // `NODE_ENV` and `JWT_SECRET` are set on the environment before the module
     // is compiled, because provider factories run during compilation: setting
-    // them afterwards would test nothing. `JWT_SECRET` is given a value so the
-    // only thing that can reject the boot is the billing guard, and the
-    // assertion below pins the message so a `JWT_SECRET` failure cannot stand in
-    // for it.
+    // them afterwards would test nothing. `JWT_SECRET` is given the value the
+    // running app already resolved, not a fresh one: a second `AppModule`
+    // compile constructs a second `JwtStrategy`, and passport keeps its
+    // strategies in a process-wide registry, so a *different* secret here would
+    // silently repoint the already-started app's authentication at it. The
+    // assertion below pins the billing message so a `JWT_SECRET` failure cannot
+    // stand in for it.
     const previousNodeEnv = process.env.NODE_ENV;
     const previousSecret = process.env.JWT_SECRET;
+    const runningSecret =
+      app.get(ConfigService).get<string>('JWT_SECRET')?.trim() ??
+      'fallback-secret';
     process.env.NODE_ENV = 'production';
-    process.env.JWT_SECRET = 'a-secret-that-is-only-for-this-assertion';
+    process.env.JWT_SECRET = runningSecret;
 
     try {
       await expect(

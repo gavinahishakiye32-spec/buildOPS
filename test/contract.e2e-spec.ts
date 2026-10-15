@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { jest } from '@jest/globals';
 import request from 'supertest';
+import Stripe from 'stripe';
 import { AppModule } from '../src/app.module.js';
 import { API_PREFIX, configureApp } from '../src/bootstrap.js';
 import { MailService } from '../src/mail/mail.service.js';
@@ -49,7 +50,30 @@ process.env.THROTTLE_TTL = '60000';
 // than failing: the contract would claim a response the code cannot produce.
 process.env.THROTTLE_ENABLED = 'true';
 
+/**
+ * The webhook route verifies its signature against this secret, and it cannot
+ * answer 200 without one -- a missing secret is a documented 400. A fixed test
+ * value lets the suite sign its own deliveries the way Stripe would; it is not
+ * a credential, because nothing in the suite (or in Stripe) will ever accept it.
+ */
+const previousWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+process.env.STRIPE_WEBHOOK_SECRET = 'whsec_contract_test_secret';
+
 const api = (path: string): string => `/${API_PREFIX}${path}`;
+
+/**
+ * Signs a payload exactly as Stripe does, so the suite exercises the real
+ * verification path instead of stubbing it. The client is only ever used for
+ * this local computation: no request is made, so no key is needed beyond the
+ * throwaway one in the constructor.
+ */
+const signer = new Stripe('sk_test_contract_signer');
+
+const signWebhook = (payload: string, secret?: string): string =>
+  signer.webhooks.generateTestHeaderString({
+    payload,
+    secret: secret ?? process.env.STRIPE_WEBHOOK_SECRET ?? '',
+  });
 
 const HTTP_METHODS = ['get', 'post', 'patch', 'put', 'delete'];
 
@@ -357,7 +381,12 @@ describe('published contract vs runtime (e2e)', () => {
       })
       .compile();
 
-    app = configureApp(moduleFixture.createNestApplication());
+    app = configureApp(
+      // `rawBody` is what the webhook signature is computed over: without the
+      // exact bytes, every delivery -- real ones included -- would fail
+      // verification and the documented 200 could never be reached.
+      moduleFixture.createNestApplication({ rawBody: true }),
+    );
     // `configureApp` does not mount the docs, so the contract this suite checks
     // the server against has to be built explicitly.
     setupSwagger(app);
@@ -418,6 +447,12 @@ describe('published contract vs runtime (e2e)', () => {
     process.env.THROTTLE_LIMIT = previousThrottleLimit;
     process.env.THROTTLE_TTL = previousThrottleTtl;
     process.env.THROTTLE_ENABLED = previousThrottleEnabled;
+
+    if (previousWebhookSecret === undefined) {
+      delete process.env.STRIPE_WEBHOOK_SECRET;
+    } else {
+      process.env.STRIPE_WEBHOOK_SECRET = previousWebhookSecret;
+    }
   });
 
   describe('auth', () => {
@@ -1167,6 +1202,92 @@ describe('published contract vs runtime (e2e)', () => {
         'no subscription',
       );
       expect(missing.body.message).toContain('Subscribe to a plan');
+    });
+  });
+
+  describe('billing webhook', () => {
+    // Stripe is the only caller of this route, and the signature is what says
+    // so -- which is also why it publishes no bearer scheme. Both documented
+    // statuses come from that one check: a delivery Stripe signed is processed,
+    // and everything else is refused before the body is read.
+    it('POST /billing/webhook returns 200 and 400 as documented', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_contract_webhook',
+        object: 'event',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            id: 'cs_test_contract_unknown_session',
+            object: 'checkout_session',
+            status: 'complete',
+            payment_status: 'paid',
+          },
+        },
+      });
+
+      const accepted = await probe(
+        'post',
+        '/billing/webhook',
+        (req) =>
+          req
+            .set('Content-Type', 'application/json')
+            .set('Stripe-Signature', signWebhook(payload))
+            .send(payload),
+        '200',
+        'correctly signed delivery',
+      );
+      expect(accepted.body).toEqual({ received: true });
+
+      // An event for a session this application never opened is acknowledged
+      // rather than refused: Stripe stops retrying what we answer 2xx to, and
+      // the same account may legitimately point at another product.
+      expect(accepted.body.received).toBe(true);
+
+      const unsigned = await probe(
+        'post',
+        '/billing/webhook',
+        (req) =>
+          req.send({
+            id: 'evt_contract_unsigned',
+            object: 'event',
+            type: 'checkout.session.completed',
+          }),
+        '400',
+        'no signature',
+      );
+      expect(unsigned.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Missing or malformed Stripe-Signature header.',
+      });
+    });
+
+    it('POST /billing/webhook rejects a delivery signed with the wrong secret', async () => {
+      const payload = JSON.stringify({
+        id: 'evt_contract_wrong_secret',
+        object: 'event',
+        type: 'checkout.session.completed',
+        data: {
+          object: { id: 'cs_test_nope', object: 'checkout_session' },
+        },
+      });
+
+      const rejected = await probe(
+        'post',
+        '/billing/webhook',
+        (req) =>
+          req
+            .set('Content-Type', 'application/json')
+            .set('Stripe-Signature', signWebhook(payload, 'whsec_wrong_secret'))
+            .send(payload),
+        '400',
+        'signed with the wrong secret',
+      );
+      expect(rejected.body).toEqual({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: 'Webhook signature verification failed.',
+      });
     });
   });
 

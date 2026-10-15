@@ -76,12 +76,19 @@ export interface BillingProvider {
 
   /**
    * Reports that the money for `reference` arrived. Returns the plan id that
-   * was paid for, or null when the reference is unknown to this provider.
+   * was paid for -- and the handle of the recurring agreement the money bought,
+   * when one exists -- or null when the reference is unknown to this provider.
    *
    * The provider resolves the reference from its own records, so a webhook can be
-   * processed without trusting anything in the request body.
+   * processed without trusting anything in the request body. `subscriptionRef`
+   * comes back here rather than from `startPurchase` because a card payment
+   * creates the agreement only once it settles: the handle does not exist at
+   * checkout time. Storing it is what lets a later cancellation stop the
+   * recurring charge instead of only the local row.
    */
-  confirmPurchase(reference: string): Promise<{ planId: string } | null>;
+  confirmPurchase(
+    reference: string,
+  ): Promise<{ planId: string; subscriptionRef?: string | null } | null>;
 
   /**
    * Abandons a purchase that has not settled, so a late payment cannot complete

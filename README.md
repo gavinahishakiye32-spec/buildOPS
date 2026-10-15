@@ -119,9 +119,11 @@ branch on:
   *previous* plan; `pendingPlan` shows what is on its way. No capacity is granted
   while a purchase is outstanding.
 
-Nothing in the domain knows how money is collected, so swapping the stub for a
-real provider is a binding in `src/billing/billing.module.ts` plus a new provider
-class. Two rules the interface exists to enforce:
+Nothing in the domain knows how money is collected: the provider is bound in
+`src/billing/billing.module.ts` and everything Stripe-shaped (Checkout sessions,
+prices, signatures, subscription cancellation) lives in
+`src/billing/stripe-billing.provider.ts`. Two rules the interface exists to
+enforce:
 
 - The provider issues the purchase `reference`; the application stores it and
   hands it straight back to `confirmPurchase`. A confirmation therefore resolves
@@ -131,19 +133,37 @@ class. Two rules the interface exists to enforce:
   session, and leaving that session open means they can still be charged for a
   plan they gave up.
 
-There is deliberately **no generic `/billing/webhook`**: signature verification is
-provider-specific, so a shared endpoint would either skip verification or be a
-hole in the app. Each provider adds its own verified route.
+`BILLING_PROVIDER` selects one of two implementations:
 
-`BILLING_PROVIDER=stub` settles synchronously and charges nothing. It refuses to
-start when `NODE_ENV=production`, so the free-plan failure mode is a boot error
-naming the missing setting rather than a live billing bug. `TRIAL_DAYS` (default
-14) sets the trial length; it is read per subscription and does not retroactively
-change a trial already running.
+- `stripe` — real payments. A purchase opens a Stripe Checkout session priced
+  from `plans.billing_price_ref`. That column starts empty and is provisioned by
+  the provider from the plan row on the first purchase, so the amount charged is
+  never the amount the client asked for. The plan is applied only when
+  `POST /api/v1/billing/webhook` receives a delivery whose `Stripe-Signature`
+  verifies against `STRIPE_WEBHOOK_SECRET` and Stripe itself reports the session
+  as paid. The route is public — its caller is Stripe, not a browser — and the
+  signature is its authentication, which is why `main.ts` creates the app with
+  `rawBody: true`: a signature over a re-serialised body can never match. When an
+  upgrade settles, the agreement it replaces is cancelled at Stripe, so a plan
+  change cannot leave a customer paying for two plans. Requires
+  `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`; the app refuses to boot
+  without them, because taking a payment it can never confirm is worse than not
+  starting.
+- `stub` — development only: settles every purchase instantly and charges
+  nothing. It refuses to start when `NODE_ENV=production`, and production
+  refuses to start without an explicit `BILLING_PROVIDER`, so the free-plan
+  failure mode is a boot error naming the missing setting rather than a live
+  billing bug.
+
+`TRIAL_DAYS` (default 14) sets the trial length; it is read per subscription and
+does not retroactively change a trial already running.
 
 `test/billing.e2e-spec.ts` drives a deferred provider double, because the bundled
 stub settles everything and would leave the central rule — a plan is never in
-force before the money arrives — untested.
+force before the money arrives — untested; `test/billing-webhook.e2e-spec.ts`
+does the same through the signed webhook route, and
+`src/billing/stripe-*.spec.ts` cover the Stripe provider and the verifier against
+a stubbed Stripe client.
 
 ## Sessions
 

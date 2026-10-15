@@ -14,6 +14,10 @@ const TAGS: [name: string, description: string][] = [
     'subscription',
     'The subscription of the authenticated user: plan, status and usage',
   ],
+  [
+    'billing',
+    'Payment provider integration: plan purchases and the verified Stripe webhook',
+  ],
   ['organizations', 'Organization CRUD within the subscription'],
   ['roles', 'Role definitions and membership assignments'],
   [
