@@ -1,0 +1,8 @@
+# Single package. This file exists so pnpm 10 can record which dependency
+# install scripts are allowed to run.
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - unrs-resolver
+
+ignoredBuiltDependencies:
+  - "@scarf/scarf"

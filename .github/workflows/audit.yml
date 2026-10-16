@@ -1,0 +1,48 @@
+name: Dependency audit
+
+on:
+  # Deploy still calls this after the malware scan. These triggers cover this
+  # repo: the only branch is develop, and a weekly run catches advisories
+  # published against a lockfile that has not changed.
+  workflow_call:
+  pull_request:
+  push:
+    branches: [develop]
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # pnpm 10. action-setup reads `packageManager` from package.json.
+      # pnpm/setup is the successor, and it only installs pnpm 11+.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      # TypeORM requires Node ^22.13 (or 20.19, or >=24.11). check-latest
+      # avoids a cached 22.0 that would fail that range.
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          check-latest: true
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high

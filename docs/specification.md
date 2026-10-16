@@ -4,7 +4,7 @@
 > ever lost. Where the implementation deviates or adds information, the authoritative record is
 > `docs/frontend-guide.md` → §9 "Endpoint reference" and §12 "Known limitations", and, for the
 > database, `schema.sql`. The machine-readable contract is `docs/openapi.json` (regenerate with
-> `npm run docs:openapi`).
+> `pnpm run docs:openapi`).
 
 ## 1. Product Overview
 

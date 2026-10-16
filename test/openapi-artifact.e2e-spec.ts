@@ -13,7 +13,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ARTIFACT = join(ROOT, 'docs', 'openapi.json');
 
 /**
- * `npm run docs:openapi` sets this flag to rewrite the committed artifact. The
+ * `pnpm run docs:openapi` sets this flag to rewrite the committed artifact. The
  * normal test run only compares, so a forgotten regeneration fails CI instead of
  * quietly shipping a stale document.
  */

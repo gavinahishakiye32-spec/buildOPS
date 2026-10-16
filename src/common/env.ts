@@ -16,7 +16,7 @@ export function isProduction(config: ConfigService): boolean {
  * to a constant means anyone who has read the repository can forge access
  * tokens for a deployment that forgot to set it. In production this throws, so
  * the misconfiguration surfaces at boot instead of at the first breach. Outside
- * production the default is kept and logged, which is what keeps `npm test` and
+ * production the default is kept and logged, which is what keeps `pnpm test` and
  * a fresh clone working.
  */
 export function getSecret(

@@ -1,0 +1,92 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  # All three run on main. Audit starts after scan succeeds.
+  # Deploy starts after audit succeeds.
+  scan:
+    uses: ./.github/workflows/security-malware-scan.yml
+
+  audit:
+    needs: scan
+    if: ${{ needs.scan.result == 'success' }}
+    uses: ./.github/workflows/audit.yml
+
+  deploy:
+    needs: audit
+    if: ${{ needs.audit.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter @bil/api build
+
+      - name: Build Web
+        run: pnpm --filter @bil/web build
+        env:
+          VITE_SITE_URL: ${{ vars.VITE_SITE_URL }}
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          if [ -z "$SSH_KEY" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY_PROD secret is not set in GitHub repository secrets."
+            exit 1
+          fi
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host 109.199.96.234\n  User maic\n  Port 2245\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  IdentityFile ~/.ssh/id_rsa\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+
+      - name: Verify server prerequisites
+        run: |
+          ssh maic@109.199.96.234 '
+            set -e
+            mkdir -p /var/www/bil
+            test -w /var/www/bil
+            command -v docker >/dev/null
+          '
+
+      - name: Sync app to server
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules' \
+            --exclude='apps/api/.env' \
+            --exclude='apps/api/.env.*' \
+            --exclude='apps/web/.env' \
+            --exclude='apps/web/.env.*' \
+            --exclude='apps/api/.next' \
+            --exclude='apps/web/dist' \
+            ./ maic@109.199.96.234:/var/www/bil/
+
+      - name: Restart services
+        run: |
+          ssh maic@109.199.96.234 '
+            set -e
+            cd /var/www/bil
+            docker compose up -d --build
+            echo "Deploy complete"
+          '
