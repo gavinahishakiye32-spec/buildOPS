@@ -1,13 +1,10 @@
 name: Dependency audit
 
 on:
-  # Deploy still calls this after the malware scan. These triggers cover this
-  # repo: the only branch is develop, and a weekly run catches advisories
-  # published against a lockfile that has not changed.
+  # On a merge to develop, Deploy calls this only after the malware scan has
+  # passed. Pull requests and the weekly run still audit on their own.
   workflow_call:
   pull_request:
-  push:
-    branches: [develop]
   schedule:
     - cron: "0 6 * * 1"
 
