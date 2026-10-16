@@ -8,7 +8,7 @@ import { MIGRATIONS } from './migrations.js';
  * had nothing to talk to, so a migration could only ever be run by hand-editing
  * `app.module.ts`.
  *
- * The npm scripts that invoke the CLI run node with `--env-file-if-exists=.env`,
+ * The pnpm scripts that invoke the CLI run node with `--env-file-if-exists=.env`,
  * because the CLI starts outside `ConfigModule` and would otherwise see an
  * empty environment. No dotenv import is needed, and none is taken from
  * `@nestjs/config`'s transitive dependencies.
