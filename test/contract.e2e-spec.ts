@@ -5964,6 +5964,472 @@ describe('published contract vs runtime (e2e)', () => {
     });
   });
 
+  describe('chat', () => {
+    // Self-contained like the notifications above: this runs after the shared
+    // fixtures have been wound down, so it brings its own organization and its
+    // own members. The shared `outsider` still resolves no membership anywhere,
+    // which is all the 403 probes need.
+    let token = '';
+    let ownUserId = '';
+    let otherToken = '';
+    let otherUserId = '';
+    let organization = '';
+    let channelId = '';
+    let messageId = '';
+    let peerMessageId = '';
+
+    beforeAll(async () => {
+      const owner = await verifiedUserWithId(
+        `chat-owner-${Date.now()}@example.com`,
+      );
+      token = owner.token;
+      ownUserId = owner.userId;
+      userTokens.push(token);
+
+      const plans = await request(server).get(api('/plans')).expect(200);
+      await request(server)
+        .post(api('/subscription'))
+        .set('Authorization', `Bearer ${token}`)
+        .send({ planId: plans.body[0].id })
+        .expect(200);
+
+      const created = await request(server)
+        .post(api('/organizations'))
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Chat Contract' })
+        .expect(201);
+      organization = created.body.id;
+
+      // A direct channel needs a second member to exist. The developer template
+      // rather than the default viewer, so the sender-only probes below are
+      // refused by the sender rule itself and not by a missing permission.
+      const other = await verifiedUserWithId(
+        `chat-peer-${Date.now()}@example.com`,
+      );
+      otherToken = other.token;
+      otherUserId = other.userId;
+      userTokens.push(otherToken);
+
+      await request(server)
+        .post(api(`/organizations/${organization}/members`))
+        .set('Authorization', `Bearer ${token}`)
+        .send({ userId: otherUserId, templateKey: 'developer' })
+        .expect(201);
+    });
+
+    const asOwner = (req: request.Test): request.Test =>
+      auth(token, req).set('x-organization-id', organization);
+
+    const asPeer = (req: request.Test): request.Test =>
+      auth(otherToken, req).set('x-organization-id', organization);
+
+    const asStranger = (req: request.Test): request.Test =>
+      auth(outsiderToken, req).set('x-organization-id', organization);
+
+    const unknownChannel =
+      '/chat/channels/00000000-0000-4000-8000-000000000000';
+    const unknownMessage =
+      '/chat/messages/00000000-0000-4000-8000-000000000000';
+
+    it('GET /chat/channels returns 200, 401 and 403', async () => {
+      const page = await probe(
+        'get',
+        '/chat/channels',
+        (req) => asOwner(req),
+        '200',
+      );
+
+      // The organization-wide room is made by this very first call, and the
+      // direct one does not exist yet, so a fresh organization lists exactly
+      // that one room.
+      expect(page.body.items).toHaveLength(1);
+      expect(page.body.items[0].channel.type).toBe('organization');
+      expect(page.body.items[0].unreadCount).toEqual(expect.any(Number));
+
+      await probe('get', '/chat/channels', (req) => req, '401', 'no token');
+      await probe('get', '/chat/channels', asStranger, '403', 'not a member');
+    });
+
+    it('POST /chat/channels returns 201, 400, 401 and 403', async () => {
+      // participantIds is the full member set, so a lone caller is a validation
+      // error rather than a room with one person in it.
+      await probe(
+        'post',
+        '/chat/channels',
+        (req) => asOwner(req).send({ participantIds: [ownUserId] }),
+        '400',
+        'participantIds below the minimum',
+      );
+
+      const created = await probe(
+        'post',
+        '/chat/channels',
+        (req) =>
+          asOwner(req).send({ participantIds: [ownUserId, otherUserId] }),
+        '201',
+        'new direct channel',
+      );
+      expect(created.body.type).toBe('direct');
+      expect(created.body.organizationId).toBe(organization);
+      channelId = created.body.id;
+
+      // Opening the same set again returns the same room -- deduplicated under
+      // the advisory lock, not rejected, so the status stays 201.
+      const reopened = await probe(
+        'post',
+        '/chat/channels',
+        (req) =>
+          asOwner(req).send({ participantIds: [ownUserId, otherUserId] }),
+        '201',
+        'already open',
+      );
+      expect(reopened.body.id).toBe(channelId);
+
+      await probe(
+        'post',
+        '/chat/channels',
+        (req) => req.send({ participantIds: [ownUserId, otherUserId] }),
+        '401',
+        'no token',
+      );
+      await probe(
+        'post',
+        '/chat/channels',
+        (req) =>
+          asStranger(req).send({ participantIds: [ownUserId, otherUserId] }),
+        '403',
+        'not a member',
+      );
+    });
+
+    it('GET /chat/channels/scope returns 200, 400, 401, 403 and 404', async () => {
+      // The organization room, opened on demand: this fresh organization has
+      // never listed its channels, and resolving is what brings it into being.
+      const org = await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) => asOwner(req).query({ type: 'organization' }),
+        '200',
+        'organization room',
+      );
+      expect(org.body.channel.type).toBe('organization');
+      expect(org.body.unreadCount).toEqual(expect.any(Number));
+
+      // The wrong shape: a scope id on the organization room, and no id on a
+      // scoped one -- each refused as written, never guessed at.
+      await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) =>
+          asOwner(req).query({
+            type: 'organization',
+            projectId: '00000000-0000-4000-8000-000000000000',
+          }),
+        '400',
+        'organization room handed a scope id',
+      );
+      await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) => asOwner(req).query({ type: 'project' }),
+        '400',
+        'scope id missing',
+      );
+
+      // A well-formed id of a record that does not exist answers 404 -- the
+      // same answer a record of another organization would give.
+      await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) =>
+          asOwner(req).query({
+            type: 'project',
+            projectId: '00000000-0000-4000-8000-000000000000',
+          }),
+        '404',
+        'unknown project',
+      );
+
+      await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) => req.query({ type: 'organization' }),
+        '401',
+        'no token',
+      );
+      await probe(
+        'get',
+        '/chat/channels/scope',
+        (req) => asStranger(req).query({ type: 'organization' }),
+        '403',
+        'not a member',
+      );
+    });
+
+    it('GET /chat/channels/{channelId} returns 200, 401, 403 and 404', async () => {
+      const found = await probe(
+        'get',
+        `/chat/channels/${channelId}`,
+        (req) => asOwner(req),
+        '200',
+      );
+      expect(found.body.id).toBe(channelId);
+      expect(found.body.type).toBe('direct');
+
+      await probe(
+        'get',
+        unknownChannel,
+        (req) => asOwner(req),
+        '404',
+        'unknown channel',
+      );
+      await probe('get', unknownChannel, (req) => req, '401', 'no token');
+      await probe(
+        'get',
+        `/chat/channels/${channelId}`,
+        asStranger,
+        '403',
+        'not a member',
+      );
+    });
+
+    it('POST /chat/channels/{channelId}/messages returns 201, 400, 401, 403 and 404', async () => {
+      const sent = await probe(
+        'post',
+        `/chat/channels/${channelId}/messages`,
+        (req) => asOwner(req).send({ body: 'The contract suite says hello.' }),
+        '201',
+        'first message',
+      );
+      messageId = sent.body.id;
+      expect(sent.body.sender.id).toBe(ownUserId);
+      expect(sent.body.channelId).toBe(channelId);
+
+      // The peer writes too, so the delete probes can separate "not the sender"
+      // from "holds chat.manage" instead of only exercising the sender path.
+      const peerSent = await probe(
+        'post',
+        `/chat/channels/${channelId}/messages`,
+        (req) => asPeer(req).send({ body: 'And the peer answers.' }),
+        '201',
+        'second message, other sender',
+      );
+      peerMessageId = peerSent.body.id;
+      expect(peerSent.body.sender.id).toBe(otherUserId);
+
+      await probe(
+        'post',
+        `/chat/channels/${channelId}/messages`,
+        (req) => asOwner(req).send({}),
+        '400',
+        'body missing',
+      );
+
+      await probe(
+        'post',
+        `${unknownChannel}/messages`,
+        (req) => asOwner(req).send({ body: 'nowhere to land' }),
+        '404',
+        'unknown channel',
+      );
+
+      await probe(
+        'post',
+        `/chat/channels/${channelId}/messages`,
+        (req) => req.send({ body: 'no token' }),
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'post',
+        `/chat/channels/${channelId}/messages`,
+        (req) => asStranger(req).send({ body: 'not a member' }),
+        '403',
+        'not a member',
+      );
+    });
+
+    it('GET /chat/channels/{channelId}/messages returns 200, 401, 403 and 404', async () => {
+      const page = await probe(
+        'get',
+        `/chat/channels/${channelId}/messages`,
+        (req) => asOwner(req),
+        '200',
+      );
+      const ids = page.body.items.map((item: { id: string }) => item.id);
+      expect(ids).toEqual(expect.arrayContaining([messageId, peerMessageId]));
+
+      await probe(
+        'get',
+        `${unknownChannel}/messages`,
+        (req) => asOwner(req),
+        '404',
+        'unknown channel',
+      );
+      await probe(
+        'get',
+        `/chat/channels/${channelId}/messages`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+      await probe(
+        'get',
+        `/chat/channels/${channelId}/messages`,
+        asStranger,
+        '403',
+        'not a member',
+      );
+    });
+
+    it('PATCH /chat/messages/{messageId} returns 200, 400, 401, 403 and 404', async () => {
+      const edited = await probe(
+        'patch',
+        `/chat/messages/${messageId}`,
+        (req) => asOwner(req).send({ body: 'Edited by the contract suite.' }),
+        '200',
+        'own message',
+      );
+      expect(edited.body.body).toBe('Edited by the contract suite.');
+      expect(edited.body.editedAt).toEqual(expect.any(String));
+
+      await probe(
+        'patch',
+        `/chat/messages/${messageId}`,
+        (req) => asOwner(req).send({}),
+        '400',
+        'body missing',
+      );
+
+      await probe(
+        'patch',
+        unknownMessage,
+        (req) => asOwner(req).send({ body: 'ghost' }),
+        '404',
+        'unknown message',
+      );
+
+      await probe(
+        'patch',
+        `/chat/messages/${messageId}`,
+        (req) => req.send({ body: 'no token' }),
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'patch',
+        `/chat/messages/${messageId}`,
+        asStranger,
+        '403',
+        'not a member',
+      );
+
+      // The peer holds `chat.create`, so the request passes the permission
+      // guard and is refused by the sender-only rule instead.
+      await probe(
+        'patch',
+        `/chat/messages/${messageId}`,
+        (req) => asPeer(req).send({ body: 'not the peer to edit' }),
+        '403',
+        'message sent by someone else',
+      );
+    });
+
+    it('DELETE /chat/messages/{messageId} returns 200, 401, 403 and 404', async () => {
+      await probe(
+        'delete',
+        unknownMessage,
+        (req) => asOwner(req),
+        '404',
+        'unknown message',
+      );
+
+      await probe(
+        'delete',
+        `/chat/messages/${messageId}`,
+        (req) => req,
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'delete',
+        `/chat/messages/${messageId}`,
+        asStranger,
+        '403',
+        'not a member',
+      );
+
+      // Not the sender and no `chat.manage`, so the sender-only rule refuses
+      // even though the peer is a member of this very conversation.
+      await probe(
+        'delete',
+        `/chat/messages/${messageId}`,
+        asPeer,
+        '403',
+        'message sent by someone else',
+      );
+
+      // The owner is not the sender of this one either -- deleting it proves
+      // the `chat.manage` half of the rule rather than the sender half.
+      const moderated = await probe(
+        'delete',
+        `/chat/messages/${peerMessageId}`,
+        (req) => asOwner(req),
+        '200',
+        'moderated by chat.manage',
+      );
+      expect(moderated.body).toEqual({ message: 'Message deleted' });
+    });
+
+    it('POST /chat/channels/{channelId}/read returns 200, 401, 403 and 404', async () => {
+      const read = await probe(
+        'post',
+        `/chat/channels/${channelId}/read`,
+        (req) => asOwner(req).send({}),
+        '200',
+        'move the marker to now',
+      );
+      expect(read.body.lastReadAt).toEqual(expect.any(String));
+
+      // The marker can also be pinned to a specific live message.
+      const pinned = await probe(
+        'post',
+        `/chat/channels/${channelId}/read`,
+        (req) => asOwner(req).send({ upToMessageId: messageId }),
+        '200',
+        'pinned to a message',
+      );
+      expect(pinned.body.lastReadAt).toEqual(expect.any(String));
+
+      await probe(
+        'post',
+        `${unknownChannel}/read`,
+        (req) => asOwner(req).send({}),
+        '404',
+        'unknown channel',
+      );
+
+      await probe(
+        'post',
+        `/chat/channels/${channelId}/read`,
+        (req) => req.send({}),
+        '401',
+        'no token',
+      );
+
+      await probe(
+        'post',
+        `/chat/channels/${channelId}/read`,
+        asStranger,
+        '403',
+        'not a member',
+      );
+    });
+  });
+
   describe('the contract itself', () => {
     it('never returned a status the document does not declare', () => {
       const undeclared: string[] = [];

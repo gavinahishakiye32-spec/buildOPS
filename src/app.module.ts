@@ -32,6 +32,7 @@ import { TimeEntryModule } from './time-entry/time-entry.module.js';
 import { TimeComplexityModule } from './time-complexity/time-complexity.module.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SettingsModule } from './settings/settings.module.js';
+import { ChatModule } from './chat/chat.module.js';
 
 @Module({
   imports: [
@@ -120,6 +121,7 @@ import { SettingsModule } from './settings/settings.module.js';
     TimeComplexityModule,
     DashboardModule,
     SettingsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

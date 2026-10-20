@@ -34,6 +34,10 @@ const TAGS: [name: string, description: string][] = [
     'notifications',
     'Your own in-app notifications, and the unread count behind the bell',
   ],
+  [
+    'chat',
+    'Chat rooms and messages: the organization channel, scoped rooms, direct conversations and read markers',
+  ],
   ['time-entries', 'Time entries tracking work'],
   ['time-complexity', 'Time complexity configurations'],
   ['dashboard', 'Dashboard metrics and summaries'],

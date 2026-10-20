@@ -1,5 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
+import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { ORGANIZATION_HEADER } from './common/types.js';
@@ -103,6 +104,10 @@ export function configureApp(app: INestApplication): INestApplication {
       transformOptions: { enableImplicitConversion: false },
     }),
   );
+  // Socket.IO for the chat gateway. Registered here rather than in `main.ts`
+  // so the e2e suites, which build the app through `configureApp`, get the
+  // same adapter as production.
+  app.useWebSocketAdapter(new IoAdapter(app));
   app.enableShutdownHooks();
 
   if (origins === true) {

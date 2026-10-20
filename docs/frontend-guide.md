@@ -546,7 +546,9 @@ The API is the only enforcement point: hiding a button is UX, not security. Ever
 `time_entry.view_all`, `time_entry.create`, `time_entry.update`,
 `time_entry.delete`, `time_entry.start_timer`, `time_entry.stop_timer`,
 `time_complexity.view`, `time_complexity.create`, `time_complexity.update`,
-`time_complexity.delete`, `dashboard.view`
+`time_complexity.delete`, `dashboard.view`, `notification.view`,
+`notification.update`, `notification.delete`, `settings.view`,
+`settings.update`, `chat.view`, `chat.create`, `chat.manage`
 
 </details>
 
@@ -752,7 +754,9 @@ ordinary read, it does not destroy it, and the response says so.
 
 Trash and restore exist for **clients, projects, tasks, subtasks, time entries,
 badges and teams**. `time-complexity` records and organization members are not
-soft-deleted; those deletes are final.
+soft-deleted; those deletes are final. Chat messages are soft-deleted in
+database terms only — the room is told, the message leaves every list — but
+there is no trash entry and no restore for them (§9.10).
 
 A trash entry is always the same shape:
 
@@ -1131,6 +1135,108 @@ Shared query parameters on `overview`, `projects` and `clients`:
 
 `/dashboard/overdue` accepts only `from` and `to`. Invalid dates are `400`.
 
+### 9.10 Chat
+
+| Method   | Path                                                       | Perm         | Errors                     |
+| -------- | ---------------------------------------------------------- | ------------ | -------------------------- |
+| `GET`    | `/chat/channels` `?page&limit&type`                        | `chat.view`  | `403`                      |
+| `POST`   | `/chat/channels`                                           | `chat.create`| `400`, `403`               |
+| `GET`    | `/chat/channels/scope` `?type&projectId&taskId&subtaskId`  | `chat.view`  | `400`, `403`, `404`        |
+| `GET`    | `/chat/channels/{channelId}`                               | `chat.view`  | `403`, `404`               |
+| `GET`    | `/chat/channels/{channelId}/messages` `?page&limit`        | `chat.view`  | `403`, `404`               |
+| `POST`   | `/chat/channels/{channelId}/messages`                      | `chat.create`| `400`, `403`, `404`        |
+| `PATCH`  | `/chat/messages/{messageId}`                               | `chat.create`| `400`, `403`, `404`        |
+| `DELETE` | `/chat/messages/{messageId}`                               | `chat.create`| `403`, `404`               |
+| `POST`   | `/chat/channels/{channelId}/read`                          | `chat.view`  | `403`, `404`               |
+
+Bodies: messages take `{ body }` (1–4000 characters) for both send and edit;
+`POST /chat/channels` takes `{ participantIds, name? }`; `POST .../read` takes an
+optional `{ upToMessageId }`. Entries returned by the list and resolve endpoints
+are `{ channel, lastMessage, unreadCount, participantCount }`. The single-channel
+route answers with the channel's own fields plus `participants` — `[{ id, name }]`
+for a direct room, `null` for a scoped one. Messages everywhere (list, send,
+edit, socket events) carry `senderId` alongside the `sender` summary, and
+`channel.lastMessageAt` moves with every message.
+
+**Rooms.** Four scopes, plus direct messages:
+
+- **Organization** — one `General` room per organization, created on the first
+  `GET /chat/channels`.
+- **Project / task / subtask** — created on demand by `GET /chat/channels/scope`.
+  Call it when the user opens that record's conversation; it answers `200` with
+  the same entry shape (creating the room if this is the first ask) and the
+  `channel.id` every other call needs. Send exactly the id belonging to `type`:
+  a missing or additional scope id is `400`, an unknown record (or one outside
+  the current organization) is `404`.
+- **Direct** — `POST /chat/channels` with the **full** member set including
+  yourself, 2–8 members. Reopening the same set returns the same room (`201`
+  again), never a second one.
+
+**Visibility.** Any member with `chat.view` can read any non-direct room and see
+it in their list. Direct rooms answer `404` — never `403` — to anyone outside
+them, so their ids cannot be probed.
+
+**Edit and delete.** Editing is sender-only (`chat.manage` does not let a
+moderator rewrite somebody else's words; the response carries `editedAt`).
+Deletion is your own message, or any message with `chat.manage`. Deleted
+messages are soft-deleted: dropped from every list, announced to the room.
+
+**Read markers.** `unreadCount` is yours alone — messages after your marker,
+excluding your own. `POST .../read` moves your marker to now (or to a specific
+message with `upToMessageId`) and emits `channel:read` to the room, so other
+tabs open on the same account refresh their badges.
+
+#### Realtime (Socket.IO)
+
+Messages are only ever **written** over REST — the socket carries them outward,
+plus the ephemeral extras. The namespace is `/chat`:
+
+```ts
+import { io } from 'socket.io-client';
+
+// Same-origin: io('/chat', { auth: { token, organizationId } })
+const socket = io(`${API_URL}/chat`, {
+  auth: { token: accessToken, organizationId },
+});
+```
+
+The handshake needs both fields: the token proves who you are, and
+`organizationId` (a uuid) is checked for live membership plus `chat.view`. On
+failure the server emits `chat:error` with `{ message }` and disconnects. Once
+connected the server joins your sockets to `user:`-rooms itself (read receipts
+for your own account arrive there); every channel room you actually want to
+hear must be joined explicitly — after the resolve or list call that gave you
+its `channelId`:
+
+```ts
+socket.emit('channel:join', { channelId }, ({ ok, error }) => {
+  if (!ok) console.warn('join refused:', error);
+});
+```
+
+Client → server (each answered with an ack):
+
+| Event           | Payload                          | Ack                        |
+| --------------- | -------------------------------- | -------------------------- |
+| `channel:join`  | `{ channelId }`                  | `{ ok, error? }` — access re-checked server-side |
+| `channel:leave` | `{ channelId }`                  | `{ ok }`                   |
+| `typing`        | `{ channelId, isTyping? }`       | `{ ok, error? }` — relayed to the room, never persisted |
+
+Server → client:
+
+| Event            | Payload                                                      | What to do                          |
+| ---------------- | ------------------------------------------------------------ | ----------------------------------- |
+| `message:created`| `{ id, channelId, senderId, sender: { id, name }, body, editedAt, createdAt }` | Append (or refetch) the message |
+| `message:updated`| same shape, `editedAt` set                                   | Replace the row                     |
+| `message:deleted`| `{ id, channelId }`                                          | Drop the row (it is gone from REST too) |
+| `channel:read`   | `{ channelId, userId, lastReadAt }`                          | Someone's badge moved — refresh if it is yours |
+| `typing`         | `{ channelId, userId, isTyping }`                            | Show/clear the typing hint          |
+| `chat:error`     | `{ message }`                                                | The server disconnects right after  |
+
+Join and typing are re-checked against your membership on every event, and a
+revoked member stops receiving messages on their next reconnect — the REST
+write path is the same guard chain as everywhere else in this API.
+
 ---
 
 ## 10. Data shapes
@@ -1299,7 +1405,9 @@ discovering them in QA:
 6. **No soft deletes.** Deletes are hard, and the only "archived" concept is the
    `status` enum on organizations, teams, clients and time-complexity estimates —
    plus `member.status`, which suspends a membership instead of deleting it
-   (§9.3). Nothing a delete removed is recoverable from the UI.
+   (§9.3). Nothing a delete removed is recoverable from the UI. Chat messages
+   are tombstoned server-side rather than destroyed, but they resurface
+   nowhere — no trash, no restore — so treat them as final as well.
 7. **`?userId` on time entries is ignored without `view_all`** — a silent
    filter, not a `403`.
 8. **Swagger docs, not this file, are the schema source of truth.** If the two

@@ -32,6 +32,9 @@ BuildOps is a multi-tenant platform for managing clients, projects, teams, tasks
 | Subtask | id, task_id, assigned_to, title, description, status, due_date, created_at, updated_at | Represents the individual execution item assigned to a User. |
 | TimeEntry | id, subtask_id, user_id, entry_time, exit_time, created_at | Represents time spent by a User on a Subtask. |
 | TimeComplexity | id, task_id, subtask_id, name, status, min_time, max_time | Defines the expected minimum and maximum time boundaries for a Task or Subtask, enabling time-complexity estimation and variance analysis. |
+| ChatChannel | id, organization_id, type, project_id, task_id, subtask_id, name, last_message_at, created_by | One conversation room: organization-wide, scoped to a project/task/subtask, or a direct message set. At most one room per scope, enforced by partial unique indexes. |
+| ChatChannelParticipant | channel_id, user_id, last_read_at, joined_at | Direct-channel membership and the per-user read marker that unread counts are measured against. |
+| ChatMessage | id, organization_id, channel_id, sender_id, body, edited_at, deleted_at, deleted_by | A chat message. Editing stamps `edited_at`; deleting soft-deletes into a tombstone that remembers who removed it. |
 
 ## 3. Detailed Field Definitions
 
@@ -467,3 +470,35 @@ A successful MVP allows a real customer to move from account creation to actual 
 **Primary business flow:** User → Plan → Tenant → Organization → Role/Permission → Client → Project → Team → Task → Badge (optional) → Subtask → Time → TimeComplexity
 
 The architecture keeps ownership, authorization, subscription limits and operational relationships clear at every level while leaving room to expand later into billing, HR, analytics, storage and integrations.
+
+## 20. Chat
+
+Organization-wide, scoped and direct conversations. Rooms and messages live behind REST; delivery and the ephemeral extras (typing, read receipts) are pushed to clients over a Socket.IO namespace. Three permissions gate it like everything else: `chat.view` to read and resolve rooms, `chat.create` to write and edit, `chat.manage` to moderate.
+
+### 20.1 Scopes and room lifecycle
+
+- Four automatically created room kinds — `organization`, `project`, `task`, `subtask` — plus explicitly created `direct` rooms.
+- Exactly one organization room per Organization (named `General`), opened on the first channel list.
+- Project, task and subtask rooms are opened on demand by resolving the room of a scope. The scope record must belong to the caller's Organization and not be in the trash; anything else answers 404 — the same answer for "does not exist" and "belongs to somebody else", so scope ids cannot be probed across tenants. A missing, extra or mismatched scope id is 400.
+- Partial unique indexes guarantee at most one room per scope: two clients resolving at once both attempt the insert and the loser reads the winner's row instead of failing.
+- Direct rooms take the full member set including the caller, 2 to 8 active members of the Organization. Identical sets are deduplicated to a single room, returned with 201 on every reopen; the set is never silently widened or narrowed.
+
+### 20.2 Visibility and access
+
+- Any member holding `chat.view` may read any non-direct room and sees it in the channel list; `chat.create` is additionally required to post, edit (own) and delete (own).
+- Opening a non-direct room registers the reader as its participant — the row read markers and membership hang off — without moving any existing marker. The single-room endpoint returns that room's direct participants (`{ id, name }` each) or `null` for scoped rooms.
+- Direct rooms are visible only to their participants. Everyone else receives 404 — never 403 — for reads, message lists, writes and socket joins alike.
+- The realtime handshake carries the access token and the claimed Organization; both are verified (live membership, `chat.view`) through the same JWT strategy as HTTP before any room is joined, and joins and typing indicators are re-checked per event. Messages are only ever written through REST, where the standard guard chain applies.
+
+### 20.3 Messages, edit and delete
+
+- Message bodies run 1 to 4000 characters. Sending counts as reading for the sender: their own message never inflates their unread count.
+- Editing is sender-only. `chat.manage` is a moderation right, not a ghost-writing one; edits stamp `edited_at` and keep no copy of the previous body.
+- Deletion is a soft delete allowed for the sender or for any member holding `chat.manage`. The tombstone is dropped from every list and announced to the room; `deleted_by` preserves who removed it, and restore is not offered.
+
+### 20.4 Read markers and realtime transport
+
+- Each participant of a room carries a `last_read_at` marker. `unreadCount` counts live messages created after it, excluding the reader's own, and belongs to exactly one reader — moving one marker never touches another's.
+- Markers advance through the read endpoint (to now, or to a chosen message) and are announced to the room so other sessions of the same account refresh their badges.
+- Socket.IO namespace `/chat` with `auth: { token, organizationId }` in the handshake. Server events: `message:created`, `message:updated`, `message:deleted`, `channel:read`, `typing`, `chat:error`. Client events: `channel:join`, `channel:leave`, `typing` — each acknowledged, joins and typing access-checked server-side.
+- Rate limiting applies to chat routes exactly as to the rest of the API.

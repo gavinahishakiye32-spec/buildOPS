@@ -61,6 +61,9 @@ export const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_UPDATE: 'settings.update',
+  CHAT_VIEW: 'chat.view',
+  CHAT_CREATE: 'chat.create',
+  CHAT_MANAGE: 'chat.manage',
 } as const;
 
 export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -141,6 +144,10 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       // is why it is not handed to a developer or a tester.
       PERMISSIONS.SETTINGS_VIEW,
       PERMISSIONS.SETTINGS_UPDATE,
+      // Owns the rooms the team talks in, including moderating them.
+      PERMISSIONS.CHAT_VIEW,
+      PERMISSIONS.CHAT_CREATE,
+      PERMISSIONS.CHAT_MANAGE,
     ],
   },
   {
@@ -177,6 +184,9 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.NOTIFICATION_VIEW,
       PERMISSIONS.NOTIFICATION_UPDATE,
       PERMISSIONS.NOTIFICATION_DELETE,
+      // Reads the rooms and writes in them; moderating is left to the manager.
+      PERMISSIONS.CHAT_VIEW,
+      PERMISSIONS.CHAT_CREATE,
     ],
   },
   {
@@ -207,6 +217,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.NOTIFICATION_VIEW,
       PERMISSIONS.NOTIFICATION_UPDATE,
       PERMISSIONS.NOTIFICATION_DELETE,
+      PERMISSIONS.CHAT_VIEW,
+      PERMISSIONS.CHAT_CREATE,
     ],
   },
   {
@@ -228,6 +240,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('notification'),
       ...viewOnly('time_entry'),
       ...viewOnly('time_complexity'),
+      ...viewOnly('chat'),
       PERMISSIONS.DASHBOARD_VIEW,
       // View only, like every other resource here: a viewer can read what the
       // organization works to, but `settings.update` is what would change it
