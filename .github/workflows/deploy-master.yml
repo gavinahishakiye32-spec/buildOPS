@@ -1,0 +1,105 @@
+name: Deploy
+
+on:
+  # A merge to develop is a push. Scan runs first, then audit, then deploy.
+  # Each job starts only when the one before it succeeded.
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    uses: ./.github/workflows/security-malware-scan.yml
+
+  audit:
+    needs: scan
+    if: ${{ needs.scan.result == 'success' }}
+    uses: ./.github/workflows/audit.yml
+
+  deploy:
+    needs: audit
+    if: ${{ needs.audit.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # pnpm 10. action-setup reads `packageManager` from package.json.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      # TypeORM requires Node ^22.13 (or 20.19, or >=24.11).
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          check-latest: true
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm build
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          if [ -z "$SSH_KEY" ]; then
+            echo "ERROR: SSH_PRIVATE_KEY_PROD secret is not set in GitHub repository secrets."
+            exit 1
+          fi
+          echo "$SSH_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host 109.199.96.234\n  User maic\n  Port 2245\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n  IdentityFile ~/.ssh/id_rsa\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+        env:
+          SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY_PROD }}
+
+      - name: Verify server prerequisites
+        run: |
+          ssh maic@109.199.96.234 '
+            set -euo pipefail
+            mkdir -p /var/www/buildops
+            test -w /var/www/buildops
+            command -v node >/dev/null
+            command -v pnpm >/dev/null
+            if [ ! -f /var/www/buildops/.env ]; then
+              echo "ERROR: /var/www/buildops/.env is missing. Copy .env.example there and fill it in. The sync will not create or overwrite it."
+              exit 1
+            fi
+            if ! systemctl cat buildops >/dev/null 2>&1; then
+              echo "ERROR: systemd unit buildops is not installed. Install deploy/buildops.service and run: systemctl enable --now buildops"
+              exit 1
+            fi
+          '
+
+      - name: Sync app to server
+        run: |
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='node_modules' \
+            --exclude='coverage' \
+            --exclude='coverage-e2e' \
+            --exclude='.resets' \
+            ./ maic@109.199.96.234:/var/www/buildops/
+
+      - name: Install production dependencies and restart
+        run: |
+          ssh maic@109.199.96.234 '
+            set -euo pipefail
+            cd /var/www/buildops
+            pnpm install --frozen-lockfile --prod
+            systemctl restart buildops
+            echo "Deploy complete"
+          '

@@ -22,8 +22,8 @@ everywhere")
 ```bash
 cp .env.example .env
 # fill in DB_* and JWT_SECRET; SMTP optional for local testing
-npm install
-npm run start:dev
+pnpm install
+pnpm run start:dev
 ```
 
 API base: `http://localhost:3000/api/v1`
@@ -39,7 +39,7 @@ See `.env.example` for all variables. Key ones: `DB_HOST/PORT/USER/PASS/NAME`, `
 
 Outside `NODE_ENV=production`, verification and reset flows do not need SMTP at all: `POST /auth/register`, `POST /auth/forgot-password` and the `403` of an unverified login return the raw token and link in the JSON body, together with `emailSent`/`emailError` reporting what the mail server did. Production responses never contain a token — there it exists only in the email.
 
-`JWT_SECRET` has no safe default: the app **refuses to boot** when `NODE_ENV=production` and it is unset, rather than signing tokens with a value published in this repository. Outside production it falls back to a development default and logs a warning, which keeps `npm test` and a fresh clone working.
+`JWT_SECRET` has no safe default: the app **refuses to boot** when `NODE_ENV=production` and it is unset, rather than signing tokens with a value published in this repository. Outside production it falls back to a development default and logs a warning, which keeps `pnpm test` and a fresh clone working.
 
 ## Architecture
 
@@ -49,19 +49,19 @@ Global guards: `ThrottlerGuard` (rate limiting). Org-scoped routes require `x-or
 ## Commands
 
 ```bash
-npm run lint        # oxlint src/ test/
-npm test            # unit tests (Jest, ESM)
-npm run test:e2e    # end-to-end tests (Jest, ESM) — needs PostgreSQL
-npm run test:cov    # unit coverage → coverage/
-npm run build       # Nest build → dist/
-npm run start:prod  # node dist/main
-npm run format      # Prettier
+pnpm run lint        # oxlint src/ test/
+pnpm test            # unit tests (Jest, ESM)
+pnpm run test:e2e    # end-to-end tests (Jest, ESM) — needs PostgreSQL
+pnpm run test:cov    # unit coverage → coverage/
+pnpm run build       # Nest build → dist/
+pnpm run start:prod  # node dist/main
+pnpm run format      # Prettier
 
-npm run migration:run       # apply pending migrations (builds first)
-npm run migration:revert    # roll back the last migration
-npm run migration:generate  # scaffold a migration from entity changes
-npm run migration:show      # list applied/pending migrations
-npm run docs:openapi     # regen docs/openapi.json
+pnpm run migration:run       # apply pending migrations (builds first)
+pnpm run migration:revert    # roll back the last migration
+pnpm run migration:generate  # scaffold a migration from entity changes
+pnpm run migration:show      # list applied/pending migrations
+pnpm run docs:openapi     # regen docs/openapi.json
 ```
 
 The e2e suite needs a reachable PostgreSQL instance and serializes itself
@@ -78,9 +78,9 @@ entities on every start, so a renamed column was a silently dropped column and n
 schema change could be reviewed before it touched real data.
 
 `src/database/data-source.ts` holds the single connection definition shared by the
-app and the `typeorm` CLI, so `npm run migration:*` operates on the same database
+app and the `typeorm` CLI, so `pnpm run migration:*` operates on the same database
 the app uses. To change the schema: edit the entities, then
-`npm run migration:generate -- src/database/migrations/NameOfChange`, and review
+`pnpm run migration:generate -- src/database/migrations/NameOfChange`, and review
 the generated SQL before committing it.
 
 `schema.sql` is an archival snapshot of the original design, not the live schema.
@@ -228,7 +228,7 @@ marked `@ApiExcludeController()` and join the document as they are documented.
 
 ## Testing Notes
 
-Unit specs live next to code (`*.spec.ts`). E2E in `test/*.e2e-spec.ts`. `test/openapi-artifact.e2e-spec.ts` enforces spec drift: the committed OpenAPI document must match the generated one. `OPENAPI_WRITE=1` is used by `npm run docs:openapi` to rewrite the committed artifact.
+Unit specs live next to code (`*.spec.ts`). E2E in `test/*.e2e-spec.ts`. `test/openapi-artifact.e2e-spec.ts` enforces spec drift: the committed OpenAPI document must match the generated one. `OPENAPI_WRITE=1` is used by `pnpm run docs:openapi` to rewrite the committed artifact.
 
 ## Conventions
 

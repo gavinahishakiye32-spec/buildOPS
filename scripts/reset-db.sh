@@ -85,7 +85,7 @@ fi
 
 # The running API holds a connection pool, and PostgreSQL refuses to drop a
 # database that still has sessions on it. Terminating them is what lets this run
-# while `npm run start:dev` is up; TypeORM reconnects on the next request.
+# while `pnpm run start:dev` is up; TypeORM reconnects on the next request.
 psql_admin -q -c \
   "SELECT pg_terminate_backend(pid) FROM pg_stat_activity
     WHERE datname = '${DB_NAME}' AND pid <> pg_backend_pid();" >/dev/null
@@ -108,7 +108,7 @@ sleep 2
 
 LOG=".resets/api.log"
 mkdir -p .resets
-setsid nohup npm run start:dev > "$LOG" 2>&1 < /dev/null &
+setsid nohup pnpm run start:dev > "$LOG" 2>&1 < /dev/null &
 echo "→ starting the API (log: $LOG)"
 
 # ── 4. wait for it, and confirm the schema came back ──────────────────────────

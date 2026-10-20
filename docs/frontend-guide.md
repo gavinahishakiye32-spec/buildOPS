@@ -44,15 +44,15 @@ works offline and in CI without starting the API.
 and is not edited by hand:
 
 ```
-npm run docs:openapi     # rewrites docs/openapi.json
-npm run test:e2e         # fails if the committed file is stale
+pnpm run docs:openapi     # rewrites docs/openapi.json
+pnpm run test:e2e         # fails if the committed file is stale
 ```
 
 Point your type generator at it: `openapi-typescript docs/openapi.json`.
 
 `test/openapi-artifact.e2e-spec.ts` regenerates the document in memory and
 compares it with the committed file, so a new endpoint, a changed DTO or a
-missing `@ApiResponse` that is not followed by `npm run docs:openapi` fails the
+missing `@ApiResponse` that is not followed by `pnpm run docs:openapi` fails the
 e2e run. It also asserts the document is complete (3.x, a server URL carrying the
 prefix, a description for every tag, an `operationId`/`summary`/`description` on
 every operation) and that the access-control extensions agree with the bearer
@@ -1412,4 +1412,4 @@ discovering them in QA:
    filter, not a `403`.
 8. **Swagger docs, not this file, are the schema source of truth.** If the two
    ever disagree, `docs/openapi.json` and the running server win. Regenerate the
-   file with `npm run docs:openapi` whenever a controller or DTO changes.
+   file with `pnpm run docs:openapi` whenever a controller or DTO changes.

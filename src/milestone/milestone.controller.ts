@@ -47,7 +47,7 @@ const MilestonePageDto = PaginatedSchema(MilestoneResponseDto, 'MilestonePage');
  * module starts hidden from the committed contract. To publish it, drop this
  * decorator, add its tag to `TAGS` in `src/swagger.setup.ts`, add its routes to
  * `DOCUMENTED_OPERATIONS` in `test/openapi.e2e-spec.ts` and regenerate
- * `docs/openapi.json` with `npm run docs:openapi`.
+ * `docs/openapi.json` with `pnpm run docs:openapi`.
  */
 @ApiRateLimited()
 @ApiTags('milestones')

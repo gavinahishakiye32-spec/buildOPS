@@ -22,3 +22,6 @@ npm-debug.log*
 .DS_Store
 # Database dumps written by scripts/reset-db.sh
 .resets/
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
