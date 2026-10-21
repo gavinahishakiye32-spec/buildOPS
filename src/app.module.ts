@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -33,6 +33,8 @@ import { TimeComplexityModule } from './time-complexity/time-complexity.module.j
 import { DashboardModule } from './dashboard/dashboard.module.js';
 import { SettingsModule } from './settings/settings.module.js';
 import { ChatModule } from './chat/chat.module.js';
+import { ActivityModule } from './activity/activity.module.js';
+import { ActivityContextInterceptor } from './activity/activity-context.interceptor.js';
 
 @Module({
   imports: [
@@ -122,6 +124,7 @@ import { ChatModule } from './chat/chat.module.js';
     DashboardModule,
     SettingsModule,
     ChatModule,
+    ActivityModule,
   ],
   controllers: [AppController],
   providers: [
@@ -133,6 +136,10 @@ import { ChatModule } from './chat/chat.module.js';
     // Global rate limiting (spec §17): `default` for the API surface and the
     // stricter `auth` bucket enforced with @Throttle on credential routes.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Publishes "who is calling" into async-local storage for the activity
+    // trail (spec §21). Global because every feature module writes events
+    // and none of them should have to remember to install it.
+    { provide: APP_INTERCEPTOR, useClass: ActivityContextInterceptor },
   ],
 })
 export class AppModule {}

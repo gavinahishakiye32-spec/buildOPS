@@ -42,6 +42,10 @@ const TAGS: [name: string, description: string][] = [
   ['time-complexity', 'Time complexity configurations'],
   ['dashboard', 'Dashboard metrics and summaries'],
   [
+    'activity',
+    'Activity trail and analytics: who did what, over time, ranked and broken down',
+  ],
+  [
     'settings',
     'Personal preferences of the authenticated user, the settings shared by an organization, and the account itself: credentials, sessions and deletion',
   ],

@@ -29,6 +29,7 @@ import {
   softDeleteBy,
   type TrashEntryDto,
 } from '../common/soft-delete.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /**
  * Teams live inside an organization (spec §7). A team member must already be an
@@ -78,14 +79,27 @@ export class TeamService {
   }
 
   async create(organizationId: string, dto: CreateTeamDto): Promise<Team> {
-    return this.teamRepo.save(
-      this.teamRepo.create({
+    return this.teamRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Team);
+      const team = await repo.save(
+        repo.create({
+          organizationId,
+          name: dto.name.trim(),
+          description: dto.description ?? null,
+          status: dto.status ?? 'active',
+        }),
+      );
+
+      await recordActivity(manager, {
         organizationId,
-        name: dto.name.trim(),
-        description: dto.description ?? null,
-        status: dto.status ?? 'active',
-      }),
-    );
+        entityType: 'team',
+        action: 'created',
+        entityId: team.id,
+        metadata: { name: team.name },
+      });
+
+      return team;
+    });
   }
 
   async update(
@@ -105,7 +119,20 @@ export class TeamService {
       team.status = dto.status;
     }
 
-    return this.teamRepo.save(team);
+    return this.teamRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Team);
+      const saved = await repo.save(team);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'team',
+        action: 'updated',
+        entityId: saved.id,
+        metadata: { name: saved.name },
+      });
+
+      return saved;
+    });
   }
 
   /**
@@ -122,8 +149,26 @@ export class TeamService {
     teamId: string,
     actorId: string,
   ): Promise<void> {
-    await this.findOne(organizationId, teamId);
-    await softDeleteBy(this.teamRepo, 'id = :id', { id: teamId }, actorId, new Date());
+    const team = await this.findOne(organizationId, teamId);
+
+    await this.teamRepo.manager.transaction(async (manager) => {
+      await softDeleteBy(
+        manager.getRepository(Team),
+        'id = :id',
+        { id: teamId },
+        actorId,
+        new Date(),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'team',
+        action: 'deleted',
+        entityId: teamId,
+        actorId,
+        metadata: { name: team.name },
+      });
+    });
   }
 
   async restore(organizationId: string, teamId: string): Promise<Team> {
@@ -140,7 +185,17 @@ export class TeamService {
       throw new ConflictException('Team is not deleted');
     }
 
-    await restoreBy(this.teamRepo, 'id = :id', { id: teamId });
+    await this.teamRepo.manager.transaction(async (manager) => {
+      await restoreBy(manager.getRepository(Team), 'id = :id', { id: teamId });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'team',
+        action: 'restored',
+        entityId: teamId,
+        metadata: { name: team.name },
+      });
+    });
 
     return this.findOne(organizationId, teamId);
   }
@@ -204,13 +259,28 @@ export class TeamService {
       throw new ConflictException('User is already a member of this team');
     }
 
-    const member = await this.teamMemberRepo.save(
-      this.teamMemberRepo.create({
-        teamId,
-        userId: user.id,
-        role: dto.role ?? 'member',
-        status: dto.status ?? 'active',
-      }),
+    const member = await this.teamMemberRepo.manager.transaction(
+      async (manager) => {
+        const repo = manager.getRepository(TeamMember);
+        const created = await repo.save(
+          repo.create({
+            teamId,
+            userId: user.id,
+            role: dto.role ?? 'member',
+            status: dto.status ?? 'active',
+          }),
+        );
+
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'member',
+          action: 'created',
+          entityId: user.id,
+          metadata: { teamId, memberId: created.id, scope: 'team' },
+        });
+
+        return created;
+      },
     );
 
     return this.loadMember(teamId, member.id);
@@ -239,7 +309,19 @@ export class TeamService {
       member.status = dto.status;
     }
 
-    await this.teamMemberRepo.save(member);
+    await this.teamMemberRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(TeamMember);
+      await repo.save(member);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'updated',
+        entityId: member.userId,
+        metadata: { teamId, memberId: member.id, scope: 'team' },
+      });
+    });
+
     return this.loadMember(teamId, member.id);
   }
 
@@ -258,7 +340,17 @@ export class TeamService {
       throw new NotFoundException('Team member not found');
     }
 
-    await this.teamMemberRepo.delete(member.id);
+    await this.teamMemberRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(TeamMember).delete(member.id);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'deleted',
+        entityId: member.userId,
+        metadata: { teamId, memberId: member.id, scope: 'team' },
+      });
+    });
   }
 
   /** Validates the subtask assignment rule (spec §11). */

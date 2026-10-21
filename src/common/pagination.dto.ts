@@ -55,7 +55,10 @@ export function toPaginated<T>(
   };
 }
 
-export function resolvePage(query: PaginationQueryDto): {
+export function resolvePage(query: {
+  page?: number;
+  limit?: number;
+}): {
   page: number;
   limit: number;
   skip: number;

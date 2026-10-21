@@ -1,9 +1,39 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { BadRequestException } from '@nestjs/common';
 import { PERMISSIONS } from '../common/permissions.js';
+import { ActivityEvent } from '../activity/activity.entity.js';
 import { Role } from './role.entity.js';
 import { Permission } from './permission.entity.js';
 import { RoleService } from './role.service.js';
+
+/**
+ * A fake `EntityManager` for the activity-recording path.
+ *
+ * The service now writes an `ActivityEvent` inside the same transaction as the
+ * mutation it describes, so the mocks have to answer `create`/`save` for that
+ * entity and route `getRepository` back to the per-entity fakes the assertions
+ * already hold on to.
+ */
+const fakeActivityRepo = () => ({
+  create: jest.fn((values: unknown) => values),
+  save: jest.fn(async (record: unknown) => record),
+});
+
+const fakeManager = (repos: {
+  roles?: unknown;
+  permissions?: unknown;
+  users?: unknown;
+}) => ({
+  // `recordActivity` calls these on the manager itself.
+  create: jest.fn((_entity: unknown, values: unknown) => values),
+  save: jest.fn(async (record: unknown) => record),
+  getRepository: (entity: unknown) => {
+    if (entity === Role) return repos.roles;
+    if (entity === Permission) return repos.permissions;
+    if (entity === ActivityEvent) return fakeActivityRepo();
+    return repos.users;
+  },
+});
 
 const roleRow = (overrides: Record<string, unknown> = {}) => ({
   id: 'role-1',
@@ -38,6 +68,20 @@ describe('RoleService guard rails', () => {
       delete: jest.fn().mockResolvedValue({ affected: 0 }),
       save: jest.fn().mockResolvedValue([]),
       create: jest.fn(),
+    };
+
+    // The service wraps mutations in `roleRepo.manager.transaction(...)` so the
+    // activity event is written with the mutation. The fake runs the callback
+    // against a manager that routes each entity back to the fakes above.
+    const manager = fakeManager({
+      roles: roleRepo,
+      permissions: permissionRepo,
+    });
+    roleRepo.manager = {
+      ...manager,
+      transaction: jest.fn(async (run: (m: unknown) => Promise<unknown>) =>
+        run(manager),
+      ),
     };
 
     userService = { findById: jest.fn() };
@@ -182,9 +226,12 @@ describe('RoleService guard rails', () => {
 
       const limits = {
         manager: {
+          create: jest.fn((values: unknown) => values),
+          save: jest.fn(async (record: unknown) => record),
           getRepository: (entity: unknown) => {
             if (entity === Role) return roleRepo;
             if (entity === Permission) return permissionRepo;
+            if (entity === ActivityEvent) return fakeActivityRepo();
             return userRepo;
           },
         },

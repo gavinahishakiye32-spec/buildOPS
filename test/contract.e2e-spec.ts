@@ -5300,6 +5300,46 @@ describe('published contract vs runtime (e2e)', () => {
     );
   });
 
+  describe('activity', () => {
+    const readOnly = [
+      ['get', '/activity/timeline'],
+      ['get', '/activity/leaderboard'],
+      ['get', '/activity/breakdown'],
+      ['get', '/activity/events'],
+    ] as ['get', string][];
+
+    it.each(readOnly)(
+      '%s returns 400, 401, 403 and 200',
+      async (method, path) => {
+        const body = await probe(method, path, (req) => asOwner(req), '200');
+        expect(body.body).toBeTruthy();
+
+        await probe(method, path, (req) => req, '401', 'no token');
+        await probe(
+          method,
+          path,
+          (req) => asOutsider(req),
+          '403',
+          'not a member',
+        );
+        await probe(
+          method,
+          path,
+          (req) => asOwner(req).query({ from: 'not-a-date' }),
+          '400',
+          'malformed range',
+        );
+        await probe(
+          method,
+          path,
+          (req) => asOwner(req).query({ entityType: 'not-an-entity' }),
+          '400',
+          'unknown entity type',
+        );
+      },
+    );
+  });
+
   describe('settings', () => {
     /**
      * The two settings routes are proved apart because they are authenticated

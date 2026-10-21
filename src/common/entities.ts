@@ -25,6 +25,7 @@ import {
   ChatChannelParticipant,
   ChatMessage,
 } from '../chat/chat.entity.js';
+import { ActivityEvent } from '../activity/activity.entity.js';
 
 /** Every entity mapped by the ORM; the single source of truth for TypeORM. */
 export const ENTITIES = [
@@ -53,4 +54,5 @@ export const ENTITIES = [
   ChatChannel,
   ChatMessage,
   ChatChannelParticipant,
+  ActivityEvent,
 ];

@@ -24,6 +24,7 @@ import {
   softDeleteBy,
   type TrashEntryDto,
 } from '../common/soft-delete.js';
+import { recordActivity } from '../activity/record-activity.js';
 import {
   CreateProjectDto,
   ProjectQueryDto,
@@ -106,7 +107,7 @@ export class ProjectService {
         await limits.assertCanConsume(current, 'projects');
 
         const projects = limits.manager.getRepository(Project);
-        return projects.save(
+        const project = await projects.save(
           projects.create({
             organizationId,
             clientId,
@@ -118,6 +119,17 @@ export class ProjectService {
             budget: dto.budget === undefined ? null : dto.budget.toFixed(2),
           }),
         );
+
+        await recordActivity(limits.manager, {
+          organizationId,
+          entityType: 'project',
+          action: 'created',
+          entityId: project.id,
+          projectId: project.id,
+          metadata: { name: project.name },
+        });
+
+        return project;
       },
     );
   }
@@ -156,7 +168,21 @@ export class ProjectService {
 
     this.assertDateOrder(project.startDate, project.endDate);
 
-    return this.projectRepo.save(project);
+    return this.projectRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Project);
+      const saved = await repo.save(project);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'project',
+        action: 'updated',
+        entityId: saved.id,
+        projectId: saved.id,
+        metadata: { name: saved.name },
+      });
+
+      return saved;
+    });
   }
 
   /**
@@ -268,6 +294,23 @@ export class ProjectService {
         at,
       );
 
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'project',
+        action: 'deleted',
+        entityId: projectId,
+        actorId,
+        projectId,
+        metadata: {
+          deleted:
+            entries +
+            subtaskIds.length +
+            taskIds.length +
+            milestoneIds.length +
+            1,
+        },
+      });
+
       return {
         deleted:
           entries + subtaskIds.length + taskIds.length + milestoneIds.length + 1,
@@ -353,6 +396,15 @@ export class ProjectService {
       }
 
       await restoreBy(projectRepo, 'id = :projectId', { projectId });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'project',
+        action: 'restored',
+        entityId: projectId,
+        projectId,
+        metadata: { name: project.name },
+      });
     });
 
     return this.findOne(organizationId, projectId);

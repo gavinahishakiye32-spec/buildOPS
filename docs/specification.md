@@ -502,3 +502,28 @@ Organization-wide, scoped and direct conversations. Rooms and messages live behi
 - Markers advance through the read endpoint (to now, or to a chosen message) and are announced to the room so other sessions of the same account refresh their badges.
 - Socket.IO namespace `/chat` with `auth: { token, organizationId }` in the handshake. Server events: `message:created`, `message:updated`, `message:deleted`, `channel:read`, `typing`, `chat:error`. Client events: `channel:join`, `channel:leave`, `typing` — each acknowledged, joins and typing access-checked server-side.
 - Rate limiting applies to chat routes exactly as to the rest of the API.
+
+## 21. Activity Analysis
+
+Who did what, across every domain module, exposed as four read-only projections behind `GET /activity/*`. One permission gates the whole surface: `analytics.view` (held by every default role template, owner included).
+
+### 21.1 The event trail
+
+- Every mutating operation on the tracked modules — clients, projects, tasks, subtasks, milestones, teams, badges, time entries, chat messages and channels, invitations, roles and member assignments — appends one row to `activity_events`: `organization_id`, `actor_id`, `entity_type`, `action`, `entity_id`, a denormalized `project_id` where one is at hand, and a small `metadata` bag.
+- `entity_type` is a closed set (`project`, `task`, `subtask`, `milestone`, `team`, `client`, `badge`, `time_entry`, `chat_message`, `chat_channel`, `invitation`, `role`, `member`) and so is `action` (`created`, `updated`, `deleted`, `restored`, `accepted`), so a typo cannot produce an unfilterable event and the API can enumerate both in Swagger.
+- The row is written **inside the same transaction as the mutation it describes**, through the transactional `EntityManager`. A best-effort insert outside the transaction would produce a feed that lies: events for changes that rolled back and missing events for changes that committed. A mutation that is rejected leaves no event behind.
+- The table is append-only from the application's point of view — there is no update or delete path, so the feed is an audit trail rather than a status document. `entity_id` carries **no foreign key**: events must outlive the rows they describe (chat channels are hard-deleted with their scope, for instance). `actor_id` and `project_id` are `SET NULL`, so a removed user or project degrades to "system / unscoped" instead of dragging the event away; `organization_id` cascades, because an event has no meaning without its tenant.
+- The actor is taken from the request-scoped context the global interceptor publishes (an `AsyncLocalStorage` set by the permission guard), unless the service already has the acting user in hand — the more reliable of the two. There is no history backfill: the trail begins when the feature ships.
+
+### 21.2 The four projections
+
+All four are organization-scoped, share one date-range contract, and accept the same filters (`from`, `to`, `projectId`, `entityType`, `action`, `actorId`).
+
+- `GET /activity/timeline` — event counts bucketed by `day` (default) or `week`, oldest bucket first. Answers `{ from, to, groupBy, buckets: [{ bucket, count }] }`.
+- `GET /activity/leaderboard` — the most active users in the range, most events first, `limit` 1–100 (default 10), ties broken by name. Answers `{ from, to, entries: [{ actorId, name, count }] }`; an entry whose actor was removed reports the raw id and a `null` name.
+- `GET /activity/breakdown` — counts per `entity_type` + `action`, most frequent first, with a `total`. Answers `{ from, to, total, items: [{ entityType, action, count }] }`.
+- `GET /activity/events` — the raw feed, newest first, paginated. Each entry carries the resolved actor `{ id, name }` (or `null`), the entity and action, the optional project and metadata, and `createdAt`.
+
+### 21.3 Range contract
+
+Identical to the dashboard, so the two surfaces agree on what "the default range" means: `from` defaults to 30 days before `to`, `to` defaults to now, the span is capped at 366 days, and `from` must not be after `to`. A malformed date, an inverted range, a span over the cap, or an unknown `entityType`/`action` is `400`.

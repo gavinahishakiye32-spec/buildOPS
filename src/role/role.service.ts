@@ -24,6 +24,7 @@ import { User } from '../user/user.entity.js';
 import { UserService } from '../user/user.service.js';
 import { Permission } from './permission.entity.js';
 import { Role } from './role.entity.js';
+import { recordActivity } from '../activity/record-activity.js';
 import {
   AddMemberDto,
   AssignRoleDto,
@@ -252,7 +253,18 @@ export class RoleService extends MembershipResolver {
 
     if (role.status !== status) {
       role.status = status;
-      await this.roleRepo.save(role);
+      await this.roleRepo.manager.transaction(async (manager) => {
+        await manager.getRepository(Role).save(role);
+
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'member',
+          action: 'updated',
+          entityId: userId,
+          actorId: actorUserId,
+          metadata: { roleId: role.id, status },
+        });
+      });
     }
 
     return describeMember(role);
@@ -318,16 +330,30 @@ export class RoleService extends MembershipResolver {
     }
 
     const replacement = await this.loadRole(target.id);
-    await this.replacePermissionRows(
-      current,
-      (replacement.permissions ?? []).map(
-        (permission) => permission.name as PermissionName,
-      ),
-    );
-    await this.roleRepo.delete(current.id);
+    return this.roleRepo.manager.transaction(async (manager) => {
+      await this.replacePermissionRows(
+        current,
+        (replacement.permissions ?? []).map(
+          (permission) => permission.name as PermissionName,
+        ),
+        manager,
+      );
+      await manager.getRepository(Role).delete(current.id);
 
-    replacement.userId = userId;
-    return this.roleRepo.save(replacement);
+      replacement.userId = userId;
+      const saved = await manager.getRepository(Role).save(replacement);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'updated',
+        entityId: userId,
+        actorId: actorUserId,
+        metadata: { roleId: saved.id, roleName: saved.name },
+      });
+
+      return saved;
+    });
   }
 
   async removeMember(organizationId: string, userId: string): Promise<void> {
@@ -339,7 +365,17 @@ export class RoleService extends MembershipResolver {
       throw new NotFoundException('Member not found in this organization');
     }
 
-    await this.roleRepo.delete(role.id);
+    await this.roleRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(Role).delete(role.id);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'deleted',
+        entityId: userId,
+        metadata: { roleId: role.id, roleName: role.name },
+      });
+    });
   }
 
   /**
@@ -446,6 +482,14 @@ export class RoleService extends MembershipResolver {
 
     await this.replacePermissionRows(saved, permissions, limits.manager);
 
+    await recordActivity(limits.manager, {
+      organizationId,
+      entityType: 'role',
+      action: 'created',
+      entityId: saved.id,
+      metadata: { name: saved.name, assignedTo: saved.userId },
+    });
+
     return this.findRole(organizationId, saved.id, limits.manager);
   }
 
@@ -463,7 +507,17 @@ export class RoleService extends MembershipResolver {
       role.description = dto.description;
     }
 
-    await this.roleRepo.save(role);
+    await this.roleRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(Role).save(role);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'role',
+        action: 'updated',
+        entityId: roleId,
+        metadata: { name: role.name },
+      });
+    });
     return this.findRole(organizationId, roleId);
   }
 
@@ -489,7 +543,18 @@ export class RoleService extends MembershipResolver {
       );
     }
 
-    await this.replacePermissionRows(role, permissions);
+    await this.roleRepo.manager.transaction(async (manager) => {
+      await this.replacePermissionRows(role, permissions, manager);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'role',
+        action: 'updated',
+        entityId: roleId,
+        actorId: actorUserId,
+        metadata: { name: role.name, permissions },
+      });
+    });
 
     return this.findRole(organizationId, roleId);
   }
@@ -530,6 +595,14 @@ export class RoleService extends MembershipResolver {
         limits.manager,
       );
 
+      await recordActivity(limits.manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'created',
+        entityId: dto.userId,
+        metadata: { roleId, roleName: role.name },
+      });
+
       return this.findRole(organizationId, roleId, limits.manager);
     });
   }
@@ -554,12 +627,24 @@ export class RoleService extends MembershipResolver {
       return role;
     }
 
+    const droppedUserId = role.userId;
     role.userId = null;
     // `findRole` loads the `user` relation, and TypeORM writes the foreign key
     // back from that relation on save: clearing only `userId` left the holder
     // in place and answered the unassign with the member it was meant to drop.
     role.user = null;
-    await this.roleRepo.save(role);
+    await this.roleRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(Role).save(role);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'member',
+        action: 'deleted',
+        entityId: droppedUserId as string,
+        actorId: actorUserId,
+        metadata: { roleId, roleName: role.name },
+      });
+    });
 
     return this.findRole(organizationId, roleId);
   }
@@ -577,7 +662,17 @@ export class RoleService extends MembershipResolver {
       );
     }
 
-    await this.roleRepo.delete(roleId);
+    await this.roleRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(Role).delete(roleId);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'role',
+        action: 'deleted',
+        entityId: roleId,
+        metadata: { name: role.name },
+      });
+    });
   }
 
   /**
@@ -657,6 +752,14 @@ export class RoleService extends MembershipResolver {
       organizationId,
       limits.manager,
     );
+
+    await recordActivity(limits.manager, {
+      organizationId,
+      entityType: 'member',
+      action: 'created',
+      entityId: input.userId,
+      metadata: { roleId: role.id, roleName: role.name },
+    });
 
     return this.findRole(organizationId, role.id, limits.manager);
   }

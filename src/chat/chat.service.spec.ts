@@ -124,7 +124,16 @@ const build = () => {
 
   const transactionManager: any = {
     query: jest.fn(async () => []),
+    // `recordActivity` writes the event through the manager itself.
+    create: jest.fn((_entity: unknown, values: unknown) => values),
+    save: jest.fn(async (record: unknown) => record),
     getRepository: jest.fn((entity: { name: string }) => {
+      if (entity.name === 'ActivityEvent') {
+        return {
+          create: jest.fn((values: unknown) => values),
+          save: jest.fn(async (record: unknown) => record),
+        };
+      }
       if (entity.name === 'ChatChannel') {
         return {
           create: channelRepo.create,

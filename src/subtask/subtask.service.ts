@@ -30,6 +30,7 @@ import {
   softDeleteBy,
   type TrashEntryDto,
 } from '../common/soft-delete.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /**
  * Subtasks are the execution items of a task, and each one is handed to a
@@ -196,16 +197,31 @@ export class SubtaskService {
       dto.assignedTo,
     );
 
-    const created = await this.subtaskRepo.save(
-      this.subtaskRepo.create({
-        taskId: task.id,
-        assignedTo,
-        title: dto.title.trim(),
-        description: dto.description ?? null,
-        status: dto.status ?? 'todo',
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-      }),
-    );
+    const created = await this.subtaskRepo.manager.transaction(async (manager) => {
+      const subtaskRepo = manager.getRepository(Subtask);
+      const saved = await subtaskRepo.save(
+        subtaskRepo.create({
+          taskId: task.id,
+          assignedTo,
+          title: dto.title.trim(),
+          description: dto.description ?? null,
+          status: dto.status ?? 'todo',
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        }),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'subtask',
+        action: 'created',
+        entityId: saved.id,
+        actorId,
+        projectId: task.projectId,
+        metadata: { title: saved.title, taskId: task.id },
+      });
+
+      return saved;
+    });
 
     await this.announceAssignment({
       organizationId,
@@ -362,7 +378,19 @@ export class SubtaskService {
       subtask.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
 
-    await this.subtaskRepo.save(subtask);
+    await this.subtaskRepo.manager.transaction(async (manager) => {
+      const subtaskRepo = manager.getRepository(Subtask);
+      await subtaskRepo.save(subtask);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'subtask',
+        action: 'updated',
+        entityId: subtaskId,
+        actorId,
+        metadata: { title: subtask.title, taskId: subtask.taskId },
+      });
+    });
 
     // Only when the work actually changed hands. Saving a status or a title is
     // not an assignment, and telling somebody their work moved when it did not
@@ -434,6 +462,15 @@ export class SubtaskService {
         at,
       );
 
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'subtask',
+        action: 'deleted',
+        entityId: subtaskId,
+        actorId,
+        metadata: { deleted: entries + 1 },
+      });
+
       return { deleted: entries + 1 };
     });
   }
@@ -482,6 +519,14 @@ export class SubtaskService {
       );
       await restoreBy(manager.getRepository(Subtask), 'id = :subtaskId', {
         subtaskId,
+      });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'subtask',
+        action: 'restored',
+        entityId: subtaskId,
+        metadata: { taskId },
       });
     });
 

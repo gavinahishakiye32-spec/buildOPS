@@ -15,6 +15,7 @@ import { Milestones1700000000012 } from './migrations/1700000000012-milestones.j
 import { RoleTemplateKeys1700000000013 } from './migrations/1700000000013-role-template-keys.js';
 import { NotificationEmails1700000000014 } from './migrations/1700000000014-notification-emails.js';
 import { Chat1700000000015 } from './migrations/1700000000015-chat.js';
+import { Activity1700000000016 } from './migrations/1700000000016-activity.js';
 
 /**
  * The ordered migration list. TypeORM records what has run in the `migrations`
@@ -39,4 +40,5 @@ export const MIGRATIONS: (new () => MigrationInterface)[] = [
   RoleTemplateKeys1700000000013,
   NotificationEmails1700000000014,
   Chat1700000000015,
+  Activity1700000000016,
 ];

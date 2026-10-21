@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import type { EntityManager } from 'typeorm';
 
 import { normalizeEmail } from '../common/email.js';
 import type { PermissionName } from '../common/permissions.js';
@@ -25,6 +26,7 @@ import type { Role } from '../role/role.entity.js';
 import { RoleService } from '../role/role.service.js';
 import { UserService } from '../user/user.service.js';
 import { OrganizationInvitation } from './invitation.entity.js';
+import { recordActivity } from '../activity/record-activity.js';
 import type { AcceptInvitationDto } from './dto/accept-invitation.dto.js';
 import type { CreateInvitationDto } from './dto/create-invitation.dto.js';
 import type {
@@ -133,19 +135,35 @@ export class InvitationService {
     await this.replaceLapsedPending(organizationId, email);
 
     const signed = this.signed.sign('invitation', {}, INVITATION_TTL_MS);
-    const invitation = await this.save(
-      this.invitationRepo.create({
-        organizationId,
-        email,
-        templateKey: template.key,
-        roleName: role ? role.name : template.name,
-        roleId: role ? role.id : null,
-        tokenHash: signed.hash,
-        status: 'pending',
-        expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
-        invitedBy: actorUserId,
-      }),
-      'An invitation for that email is already pending. Revoke it first to send a new one.',
+    const invitation = await this.invitationRepo.manager.transaction(
+      async (manager) => {
+        const saved = await this.save(
+          manager.getRepository(OrganizationInvitation).create({
+            organizationId,
+            email,
+            templateKey: template.key,
+            roleName: role ? role.name : template.name,
+            roleId: role ? role.id : null,
+            tokenHash: signed.hash,
+            status: 'pending',
+            expiresAt: new Date(Date.now() + INVITATION_TTL_MS),
+            invitedBy: actorUserId,
+          }),
+          'An invitation for that email is already pending. Revoke it first to send a new one.',
+          manager,
+        );
+
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'invitation',
+          action: 'created',
+          entityId: saved.id,
+          actorId: actorUserId,
+          metadata: { email: saved.email, roleName: saved.roleName },
+        });
+
+        return saved;
+      },
     );
 
     const delivery = await dispatchEmail(this.config, () =>
@@ -200,7 +218,17 @@ export class InvitationService {
 
     if (invitation.status !== 'revoked') {
       invitation.status = 'revoked';
-      await this.invitationRepo.save(invitation);
+      await this.invitationRepo.manager.transaction(async (manager) => {
+        await manager.getRepository(OrganizationInvitation).save(invitation);
+
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'invitation',
+          action: 'deleted',
+          entityId: invitation.id,
+          metadata: { email: invitation.email },
+        });
+      });
     }
 
     return invitation.toResponse();
@@ -285,7 +313,18 @@ export class InvitationService {
 
     invitation.status = 'accepted';
     invitation.acceptedAt = new Date();
-    await this.invitationRepo.save(invitation);
+    await this.invitationRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(OrganizationInvitation).save(invitation);
+
+      await recordActivity(manager, {
+        organizationId: invitation.organizationId,
+        entityType: 'invitation',
+        action: 'accepted',
+        entityId: invitation.id,
+        actorId: user.id,
+        metadata: { email: invitation.email, roleName: invitation.roleName },
+      });
+    });
 
     const issued = await this.authService.establishSession(user, client);
 
@@ -524,9 +563,14 @@ export class InvitationService {
   private async save(
     invitation: OrganizationInvitation,
     conflictMessage: string,
+    manager?: EntityManager,
   ): Promise<OrganizationInvitation> {
+    const repo = manager
+      ? manager.getRepository(OrganizationInvitation)
+      : this.invitationRepo;
+
     try {
-      return await this.invitationRepo.save(invitation);
+      return await repo.save(invitation);
     } catch (error) {
       if (isUniqueViolation(error)) {
         throw new ConflictException(conflictMessage);

@@ -17,6 +17,7 @@ import {
   type Paginated,
   type PaginationQueryDto,
 } from '../common/pagination.dto.js';
+import { recordActivity } from '../activity/record-activity.js';
 import { Client } from './client.entity.js';
 import { CreateClientDto, UpdateClientDto } from './dto/client.dto.js';
 
@@ -63,17 +64,30 @@ export class ClientService {
       await this.assertEmailAvailable(email);
     }
 
-    return this.clientRepo.save(
-      this.clientRepo.create({
+    return this.clientRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Client);
+      const client = await repo.save(
+        repo.create({
+          organizationId,
+          name: dto.name.trim(),
+          email,
+          phone: dto.phone ?? null,
+          industry: dto.industry ?? null,
+          website: dto.website ?? null,
+          status: dto.status ?? 'active',
+        }),
+      );
+
+      await recordActivity(manager, {
         organizationId,
-        name: dto.name.trim(),
-        email,
-        phone: dto.phone ?? null,
-        industry: dto.industry ?? null,
-        website: dto.website ?? null,
-        status: dto.status ?? 'active',
-      }),
-    );
+        entityType: 'client',
+        action: 'created',
+        entityId: client.id,
+        metadata: { name: client.name },
+      });
+
+      return client;
+    });
   }
 
   async update(
@@ -108,7 +122,20 @@ export class ClientService {
       client.status = dto.status;
     }
 
-    return this.clientRepo.save(client);
+    return this.clientRepo.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(Client);
+      const saved = await repo.save(client);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'client',
+        action: 'updated',
+        entityId: saved.id,
+        metadata: { name: saved.name },
+      });
+
+      return saved;
+    });
   }
 
   /**
@@ -124,8 +151,26 @@ export class ClientService {
     clientId: string,
     actorId: string,
   ): Promise<void> {
-    await this.findOne(organizationId, clientId);
-    await softDeleteBy(this.clientRepo, 'id = :id', { id: clientId }, actorId, new Date());
+    const client = await this.findOne(organizationId, clientId);
+
+    await this.clientRepo.manager.transaction(async (manager) => {
+      await softDeleteBy(
+        manager.getRepository(Client),
+        'id = :id',
+        { id: clientId },
+        actorId,
+        new Date(),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'client',
+        action: 'deleted',
+        entityId: clientId,
+        actorId,
+        metadata: { name: client.name },
+      });
+    });
   }
 
   /** Brings a deleted client back, projects included. */
@@ -155,7 +200,19 @@ export class ClientService {
       await this.assertEmailAvailable(client.email, clientId);
     }
 
-    await restoreBy(this.clientRepo, 'id = :id', { id: clientId });
+    await this.clientRepo.manager.transaction(async (manager) => {
+      await restoreBy(manager.getRepository(Client), 'id = :id', {
+        id: clientId,
+      });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'client',
+        action: 'restored',
+        entityId: clientId,
+        metadata: { name: client.name },
+      });
+    });
 
     return this.findOne(organizationId, clientId);
   }

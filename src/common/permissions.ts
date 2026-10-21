@@ -59,6 +59,7 @@ export const PERMISSIONS = {
   TIME_COMPLEXITY_UPDATE: 'time_complexity.update',
   TIME_COMPLEXITY_DELETE: 'time_complexity.delete',
   DASHBOARD_VIEW: 'dashboard.view',
+  ANALYTICS_VIEW: 'analytics.view',
   SETTINGS_VIEW: 'settings.view',
   SETTINGS_UPDATE: 'settings.update',
   CHAT_VIEW: 'chat.view',
@@ -133,6 +134,9 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_COMPLEXITY_UPDATE,
       PERMISSIONS.TIME_COMPLEXITY_DELETE,
       PERMISSIONS.DASHBOARD_VIEW,
+      // Reads the activity trail the same way it reads the dashboard: it is a
+      // report on the organization, not a lever on it.
+      PERMISSIONS.ANALYTICS_VIEW,
       // Runs delivery, so it also owns milestones and the notification inbox;
       // `notification.update` and `notification.delete` only ever touch the
       // actor's own rows, so they are safe to share widely.
@@ -178,6 +182,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_ENTRY_START_TIMER,
       PERMISSIONS.TIME_ENTRY_STOP_TIMER,
       PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.ANALYTICS_VIEW,
       PERMISSIONS.SETTINGS_VIEW,
       // The inbox is personal: update and delete act only on the caller's own
       // notifications, so a developer may keep their own inbox tidy.
@@ -211,6 +216,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.TIME_ENTRY_START_TIMER,
       PERMISSIONS.TIME_ENTRY_STOP_TIMER,
       PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.ANALYTICS_VIEW,
       PERMISSIONS.SETTINGS_VIEW,
       // A reviewer still gets pinged about what they are asked to look at and can
       // manage their own inbox.
@@ -242,6 +248,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       ...viewOnly('time_complexity'),
       ...viewOnly('chat'),
       PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.ANALYTICS_VIEW,
       // View only, like every other resource here: a viewer can read what the
       // organization works to, but `settings.update` is what would change it
       // for everyone. `/settings/me` is not gated by this permission at all --

@@ -548,7 +548,7 @@ The API is the only enforcement point: hiding a button is UX, not security. Ever
 `time_complexity.view`, `time_complexity.create`, `time_complexity.update`,
 `time_complexity.delete`, `dashboard.view`, `notification.view`,
 `notification.update`, `notification.delete`, `settings.view`,
-`settings.update`, `chat.view`, `chat.create`, `chat.manage`
+`settings.update`, `chat.view`, `chat.create`, `chat.manage`, `analytics.view`
 
 </details>
 
@@ -1236,6 +1236,61 @@ Server → client:
 Join and typing are re-checked against your membership on every event, and a
 revoked member stops receiving messages on their next reconnect — the REST
 write path is the same guard chain as everywhere else in this API.
+
+### 9.11 Activity
+
+Four read-only projections over the organization's activity trail. Every one
+needs `analytics.view` (held by all default role templates, owner included), a
+valid token and organization context.
+
+| Method | Path                     | Perm              | Errors       |
+| ------ | ------------------------ | ----------------- | ------------ |
+| `GET`  | `/activity/timeline`     | `analytics.view`  | `400`, `403` |
+| `GET`  | `/activity/leaderboard`  | `analytics.view`  | `400`, `403` |
+| `GET`  | `/activity/breakdown`    | `analytics.view`  | `400`, `403` |
+| `GET`  | `/activity/events`       | `analytics.view`  | `400`, `403` |
+
+Shared query parameters — the same range contract as the dashboard:
+
+| Param        | Type                                                        | Default                 |
+| ------------ | ----------------------------------------------------------- | ----------------------- |
+| `from`       | ISO date                                                    | 30 days ago (inclusive) |
+| `to`         | ISO date                                                    | now (inclusive)         |
+| `projectId`  | uuid                                                        | — (whole organization)  |
+| `entityType` | one of the tracked entity types (see below)                 | — (all)                 |
+| `action`     | `created \| updated \| deleted \| restored \| accepted`     | — (all)                 |
+| `actorId`    | uuid                                                        | — (everyone)            |
+| `groupBy`    | `day \| week` — **timeline only**                           | `day`                   |
+| `limit`      | 1–100 — **leaderboard only**                                | `10`                    |
+| `page`, `limit` | pagination — **events only**                             | `1`, `20`               |
+
+`entityType` is one of `project`, `task`, `subtask`, `milestone`, `team`,
+`client`, `badge`, `time_entry`, `chat_message`, `chat_channel`, `invitation`,
+`role`, `member`. A malformed date, a `from` after `to`, a span over 366 days,
+or an unknown `entityType`/`action` is `400`. The range defaults are identical
+to the dashboard's, so the two surfaces agree on "the default range".
+
+Response shapes:
+
+- **`/activity/timeline`** — `{ from, to, groupBy, buckets: [{ bucket, count }] }`,
+  oldest bucket first.
+- **`/activity/leaderboard`** — `{ from, to, entries: [{ actorId, name, count }] }`,
+  most events first, ties by name. An entry whose actor was removed reports the
+  raw id with a `null` name.
+- **`/activity/breakdown`** — `{ from, to, total, items: [{ entityType, action, count }] }`,
+  most frequent first.
+- **`/activity/events`** — a page `{ items, total, page, limit, totalPages }`,
+  newest first. Each item is
+  `{ id, entityType, action, entityId, projectId | null, actor | null, metadata | null, createdAt }`
+  where `actor` is `{ id, name | null }`. `actor` is `null` only for events with
+  no actor at all (system-level), and `name` is `null` when the user was removed.
+  `metadata` carries non-essential extras (a name snapshot, the fields an update
+  touched) — never render a line that depends on it.
+
+Note that `projectId` is only filled where a project was cheaply in hand at
+write time: project, task, subtask and milestone events carry it; team, client,
+member, role, invitation and most chat events are organization-level and are
+**excluded** by a `projectId` filter.
 
 ---
 

@@ -27,6 +27,7 @@ import {
   TimeEntryQueryDto,
   UpdateTimeEntryDto,
 } from './dto/time-entry.dto.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /**
  * Time logging (spec §12). Entries hang off a subtask; the organization is
@@ -139,14 +140,28 @@ export class TimeEntryService {
       ? this.assertNotInFuture(new Date(dto.entryTime))
       : new Date();
 
-    return this.timeEntryRepo.save(
-      this.timeEntryRepo.create({
-        subtaskId: dto.subtaskId,
-        userId,
-        entryTime,
-        exitTime: null,
-      }),
-    );
+    return this.timeEntryRepo.manager.transaction(async (manager) => {
+      const timeEntryRepo = manager.getRepository(TimeEntry);
+      const entry = await timeEntryRepo.save(
+        timeEntryRepo.create({
+          subtaskId: dto.subtaskId,
+          userId,
+          entryTime,
+          exitTime: null,
+        }),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'created',
+        entityId: entry.id,
+        actorId: userId,
+        metadata: { kind: 'timer_start', subtaskId: dto.subtaskId },
+      });
+
+      return entry;
+    });
   }
 
   async stopTimer(
@@ -175,7 +190,26 @@ export class TimeEntryService {
     }
 
     entry.exitTime = exitTime;
-    return this.timeEntryRepo.save(entry);
+
+    return this.timeEntryRepo.manager.transaction(async (manager) => {
+      const timeEntryRepo = manager.getRepository(TimeEntry);
+      const saved = await timeEntryRepo.save(entry);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'updated',
+        entityId: saved.id,
+        actorId: userId,
+        metadata: {
+          kind: 'timer_stop',
+          subtaskId: saved.subtaskId,
+          seconds: saved.durationSeconds(exitTime),
+        },
+      });
+
+      return saved;
+    });
   }
 
   async create(
@@ -202,14 +236,31 @@ export class TimeEntryService {
       }
     }
 
-    return this.timeEntryRepo.save(
-      this.timeEntryRepo.create({
-        subtaskId: dto.subtaskId,
-        userId,
-        entryTime,
-        exitTime,
-      }),
-    );
+    return this.timeEntryRepo.manager.transaction(async (manager) => {
+      const timeEntryRepo = manager.getRepository(TimeEntry);
+      const entry = await timeEntryRepo.save(
+        timeEntryRepo.create({
+          subtaskId: dto.subtaskId,
+          userId,
+          entryTime,
+          exitTime,
+        }),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'created',
+        entityId: entry.id,
+        actorId: userId,
+        metadata: {
+          subtaskId: entry.subtaskId,
+          seconds: entry.durationSeconds(entryTime),
+        },
+      });
+
+      return entry;
+    });
   }
 
   async update(
@@ -238,7 +289,24 @@ export class TimeEntryService {
     entry.entryTime = entryTime;
     entry.exitTime = exitTime;
 
-    return this.timeEntryRepo.save(entry);
+    return this.timeEntryRepo.manager.transaction(async (manager) => {
+      const timeEntryRepo = manager.getRepository(TimeEntry);
+      const saved = await timeEntryRepo.save(entry);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'updated',
+        entityId: saved.id,
+        actorId: userId,
+        metadata: {
+          subtaskId: saved.subtaskId,
+          seconds: saved.durationSeconds(entryTime),
+        },
+      });
+
+      return saved;
+    });
   }
 
   /**
@@ -254,14 +322,26 @@ export class TimeEntryService {
     userId: string,
     entryId: string,
   ): Promise<void> {
-    await this.findOwnedEntry(organizationId, entryId, userId);
-    await softDeleteBy(
-      this.timeEntryRepo,
-      'id = :entryId',
-      { entryId },
-      userId,
-      new Date(),
-    );
+    const entry = await this.findOwnedEntry(organizationId, entryId, userId);
+
+    await this.timeEntryRepo.manager.transaction(async (manager) => {
+      await softDeleteBy(
+        manager.getRepository(TimeEntry),
+        'id = :entryId',
+        { entryId },
+        userId,
+        new Date(),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'deleted',
+        entityId: entryId,
+        actorId: userId,
+        metadata: { subtaskId: entry.subtaskId },
+      });
+    });
   }
 
   /** Restores one of the caller's own deleted entries. */
@@ -299,7 +379,20 @@ export class TimeEntryService {
       );
     }
 
-    await restoreBy(this.timeEntryRepo, 'id = :entryId', { entryId });
+    await this.timeEntryRepo.manager.transaction(async (manager) => {
+      await restoreBy(manager.getRepository(TimeEntry), 'id = :entryId', {
+        entryId,
+      });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'time_entry',
+        action: 'restored',
+        entityId: entryId,
+        actorId: userId,
+        metadata: { subtaskId: entry.subtaskId },
+      });
+    });
 
     return this.findOwnedEntry(organizationId, entryId, userId);
   }

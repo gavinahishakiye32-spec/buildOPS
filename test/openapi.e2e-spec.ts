@@ -241,6 +241,12 @@ const DOCUMENTED_OPERATIONS: [string, string, string[]][] = [
   ['GET', '/dashboard/projects', ['200']],
   ['GET', '/dashboard/clients', ['200']],
   ['GET', '/dashboard/overdue', ['200']],
+  // Activity analysis: four read-only projections over the same event trail,
+  // all organization-scoped and range-filtered like the dashboard.
+  ['GET', '/activity/timeline', ['200']],
+  ['GET', '/activity/leaderboard', ['200']],
+  ['GET', '/activity/breakdown', ['200']],
+  ['GET', '/activity/events', ['200']],
 ];
 
 /** Operations reachable without a bearer token. */

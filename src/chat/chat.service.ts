@@ -31,6 +31,7 @@ import {
   type MarkReadDto,
   type ResolveChannelDto,
 } from './dto/chat.dto.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /** Scopes a room can be opened for; `direct` is created explicitly, never ensured. */
 export type AutoChannelType = (typeof AUTO_CHAT_CHANNEL_TYPES)[number];
@@ -298,6 +299,15 @@ export class ChatService {
         ),
       );
 
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'chat_channel',
+        action: 'created',
+        entityId: channel.id,
+        actorId: userId,
+        metadata: { type: 'direct', participants: participantIds.length },
+      });
+
       return channel;
     });
   }
@@ -433,6 +443,15 @@ export class ChatService {
         // unread until you happened to open the room.
         await this.touchParticipant(manager, channelId, userId, saved.createdAt);
 
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'chat_message',
+          action: 'created',
+          entityId: saved.id,
+          actorId: userId,
+          metadata: { channelId },
+        });
+
         return saved;
       },
     );
@@ -464,7 +483,21 @@ export class ChatService {
 
     message.body = trimmed;
     message.editedAt = new Date();
-    const saved = await this.messageRepo.save(message);
+    const saved = await this.messageRepo.manager.transaction(async (manager) => {
+      const messages = manager.getRepository(ChatMessage);
+      const updated = await messages.save(message);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'chat_message',
+        action: 'updated',
+        entityId: updated.id,
+        actorId: userId,
+        metadata: { channelId: updated.channelId },
+      });
+
+      return updated;
+    });
 
     this.gateway.emitToChannel(message.channelId, 'message:updated', {
       ...saved.toResponse(),
@@ -495,7 +528,18 @@ export class ChatService {
 
     message.deletedAt = new Date();
     message.deletedBy = userId;
-    await this.messageRepo.save(message);
+    await this.messageRepo.manager.transaction(async (manager) => {
+      await manager.getRepository(ChatMessage).save(message);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'chat_message',
+        action: 'deleted',
+        entityId: message.id,
+        actorId: userId,
+        metadata: { channelId: message.channelId, moderated: canModerate },
+      });
+    });
 
     this.gateway.emitToChannel(message.channelId, 'message:deleted', {
       id: message.id,

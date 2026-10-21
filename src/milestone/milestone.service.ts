@@ -25,6 +25,7 @@ import {
   MilestoneQueryDto,
   UpdateMilestoneDto,
 } from './dto/milestone.dto.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /**
  * Milestones are deadlines a project's tasks are grouped under. They belong to
@@ -91,15 +92,32 @@ export class MilestoneService {
   ): Promise<Milestone> {
     const project = await this.requireProject(organizationId, dto.projectId);
 
-    const milestone = await this.milestoneRepo.save(
-      this.milestoneRepo.create({
-        organizationId,
-        projectId: project.id,
-        name: dto.name.trim(),
-        description: dto.description ?? null,
-        status: dto.status ?? 'planned',
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-      }),
+    const milestone = await this.milestoneRepo.manager.transaction(
+      async (manager) => {
+        const milestoneRepo = manager.getRepository(Milestone);
+        const saved = await milestoneRepo.save(
+          milestoneRepo.create({
+            organizationId,
+            projectId: project.id,
+            name: dto.name.trim(),
+            description: dto.description ?? null,
+            status: dto.status ?? 'planned',
+            dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+          }),
+        );
+
+        await recordActivity(manager, {
+          organizationId,
+          entityType: 'milestone',
+          action: 'created',
+          entityId: saved.id,
+          actorId,
+          projectId: project.id,
+          metadata: { name: saved.name },
+        });
+
+        return saved;
+      },
     );
 
     await this.notifyBroadcast(
@@ -134,7 +152,20 @@ export class MilestoneService {
       milestone.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
 
-    await this.milestoneRepo.save(milestone);
+    await this.milestoneRepo.manager.transaction(async (manager) => {
+      const milestoneRepo = manager.getRepository(Milestone);
+      await milestoneRepo.save(milestone);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'milestone',
+        action: 'updated',
+        entityId: milestoneId,
+        actorId,
+        projectId: milestone.projectId,
+        metadata: { name: milestone.name },
+      });
+    });
 
     await this.notifyBroadcast(
       organizationId,
@@ -187,6 +218,16 @@ export class MilestoneService {
         at,
       );
 
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'milestone',
+        action: 'deleted',
+        entityId: milestoneId,
+        actorId,
+        projectId: milestone.projectId,
+        metadata: { name: milestone.name },
+      });
+
       return { deleted: taskIds.length + 1 };
     });
 
@@ -238,7 +279,21 @@ export class MilestoneService {
       }
     }
 
-    await restoreBy(this.milestoneRepo, 'id = :milestoneId', { milestoneId });
+    await this.milestoneRepo.manager.transaction(async (manager) => {
+      await restoreBy(manager.getRepository(Milestone), 'id = :milestoneId', {
+        milestoneId,
+      });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'milestone',
+        action: 'restored',
+        entityId: milestoneId,
+        actorId,
+        projectId: milestone.projectId,
+        metadata: { name: milestone.name },
+      });
+    });
 
     const restored = await this.findOne(organizationId, milestoneId);
 

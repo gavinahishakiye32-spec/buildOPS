@@ -26,6 +26,7 @@ import {
   type TrashEntryDto,
 } from '../common/soft-delete.js';
 import { CreateTaskDto, TaskQueryDto, UpdateTaskDto } from './dto/task.dto.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /** A task plus the subtask totals the board renders on its card. */
 export interface TaskWithRollup {
@@ -206,19 +207,33 @@ export class TaskService {
       dto.milestoneId,
     );
 
-    const created = await this.taskRepo.save(
-      this.taskRepo.create({
+    const created = await this.taskRepo.manager.transaction(async (manager) => {
+      const taskRepo = manager.getRepository(Task);
+      const saved = await taskRepo.save(
+        taskRepo.create({
+          projectId: project.id,
+          teamId,
+          badgeId,
+          milestoneId,
+          title: dto.title.trim(),
+          description: dto.description ?? null,
+          priority: dto.priority ?? 'medium',
+          status: dto.status ?? 'todo',
+          dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+        }),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'task',
+        action: 'created',
+        entityId: saved.id,
         projectId: project.id,
-        teamId,
-        badgeId,
-        milestoneId,
-        title: dto.title.trim(),
-        description: dto.description ?? null,
-        priority: dto.priority ?? 'medium',
-        status: dto.status ?? 'todo',
-        dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
-      }),
-    );
+        metadata: { title: saved.title },
+      });
+
+      return saved;
+    });
 
     // Re-read rather than answering from the insert: the row just written has
     // no owner relation loaded, so `create` would report a task assigned on the
@@ -268,7 +283,20 @@ export class TaskService {
       task.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
 
-    await this.taskRepo.save(task);
+    await this.taskRepo.manager.transaction(async (manager) => {
+      const taskRepo = manager.getRepository(Task);
+      await taskRepo.save(task);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'task',
+        action: 'updated',
+        entityId: taskId,
+        projectId: task.projectId,
+        metadata: { title: task.title },
+      });
+    });
+
     return this.findOne(organizationId, taskId);
   }
 
@@ -285,7 +313,7 @@ export class TaskService {
     actorId: string,
     confirmed: boolean,
   ): Promise<{ deleted: number }> {
-    await this.findOne(organizationId, taskId);
+    const task = await this.findOne(organizationId, taskId);
 
     if (!confirmed) {
       throw new ConflictException(CASCADE_CONFIRMATION_REQUIRED);
@@ -332,6 +360,16 @@ export class TaskService {
       }
 
       await softDeleteBy(taskRepo, 'id = :taskId', { taskId }, actorId, at);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'task',
+        action: 'deleted',
+        entityId: taskId,
+        actorId,
+        projectId: task.projectId,
+        metadata: { deleted: entries + subtaskIds.length + 1 },
+      });
 
       return { deleted: entries + subtaskIds.length + 1 };
     });
@@ -383,6 +421,15 @@ export class TaskService {
       }
 
       await restoreBy(taskRepo, 'id = :taskId', { taskId });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'task',
+        action: 'restored',
+        entityId: taskId,
+        projectId: task.projectId,
+        metadata: { title: task.title },
+      });
     });
 
     return this.findOne(organizationId, taskId);

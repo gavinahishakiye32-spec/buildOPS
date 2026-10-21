@@ -18,6 +18,7 @@ import {
   softDeleteBy,
   type TrashEntryDto,
 } from '../common/soft-delete.js';
+import { recordActivity } from '../activity/record-activity.js';
 
 /** Badges are organization-defined task classifications (spec §10). */
 @Injectable()
@@ -56,15 +57,28 @@ export class BadgeService {
   }
 
   async create(organizationId: string, dto: CreateBadgeDto): Promise<Badge> {
-    return this.badgeRepo.save(
-      this.badgeRepo.create({
+    return this.badgeRepo.manager.transaction(async (manager) => {
+      const badgeRepo = manager.getRepository(Badge);
+      const badge = await badgeRepo.save(
+        badgeRepo.create({
+          organizationId,
+          name: dto.name.trim(),
+          description: dto.description ?? null,
+          color: dto.color ?? null,
+          icon: dto.icon ?? null,
+        }),
+      );
+
+      await recordActivity(manager, {
         organizationId,
-        name: dto.name.trim(),
-        description: dto.description ?? null,
-        color: dto.color ?? null,
-        icon: dto.icon ?? null,
-      }),
-    );
+        entityType: 'badge',
+        action: 'created',
+        entityId: badge.id,
+        metadata: { name: badge.name },
+      });
+
+      return badge;
+    });
   }
 
   async update(
@@ -87,7 +101,20 @@ export class BadgeService {
       badge.icon = dto.icon;
     }
 
-    return this.badgeRepo.save(badge);
+    return this.badgeRepo.manager.transaction(async (manager) => {
+      const badgeRepo = manager.getRepository(Badge);
+      const saved = await badgeRepo.save(badge);
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'badge',
+        action: 'updated',
+        entityId: badgeId,
+        metadata: { name: saved.name },
+      });
+
+      return saved;
+    });
   }
 
   /**
@@ -102,8 +129,26 @@ export class BadgeService {
     badgeId: string,
     actorId: string,
   ): Promise<void> {
-    await this.findOne(organizationId, badgeId);
-    await softDeleteBy(this.badgeRepo, 'id = :id', { id: badgeId }, actorId, new Date());
+    const badge = await this.findOne(organizationId, badgeId);
+
+    await this.badgeRepo.manager.transaction(async (manager) => {
+      await softDeleteBy(
+        manager.getRepository(Badge),
+        'id = :id',
+        { id: badgeId },
+        actorId,
+        new Date(),
+      );
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'badge',
+        action: 'deleted',
+        entityId: badgeId,
+        actorId,
+        metadata: { name: badge.name },
+      });
+    });
   }
 
   async restore(organizationId: string, badgeId: string): Promise<Badge> {
@@ -120,7 +165,17 @@ export class BadgeService {
       throw new ConflictException('Badge is not deleted');
     }
 
-    await restoreBy(this.badgeRepo, 'id = :id', { id: badgeId });
+    await this.badgeRepo.manager.transaction(async (manager) => {
+      await restoreBy(manager.getRepository(Badge), 'id = :id', { id: badgeId });
+
+      await recordActivity(manager, {
+        organizationId,
+        entityType: 'badge',
+        action: 'restored',
+        entityId: badgeId,
+        metadata: { name: badge.name },
+      });
+    });
 
     return this.findOne(organizationId, badgeId);
   }

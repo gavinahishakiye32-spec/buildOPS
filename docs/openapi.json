@@ -13674,6 +13674,774 @@
           "chat.view"
         ]
       }
+    },
+    "/activity/timeline": {
+      "get": {
+        "description": "Event counts bucketed by day or week for the active organization (default: last 30 days).",
+        "operationId": "ActivityController_timeline",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound; defaults to 30 days ago",
+            "schema": {
+              "example": "2026-09-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound; defaults to now",
+            "schema": {
+              "example": "2026-09-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events about one project. Events without a project (teams, clients, members, most chat rooms) never match a projectId filter.",
+            "schema": {
+              "example": "7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of row",
+            "schema": {
+              "example": "task",
+              "type": "string",
+              "enum": [
+                "project",
+                "task",
+                "subtask",
+                "milestone",
+                "team",
+                "client",
+                "badge",
+                "time_entry",
+                "chat_message",
+                "chat_channel",
+                "invitation",
+                "role",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of change",
+            "schema": {
+              "example": "created",
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "deleted",
+                "restored",
+                "accepted"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events performed by one user",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupBy",
+            "required": false,
+            "in": "query",
+            "description": "Bucket size; defaults to day",
+            "schema": {
+              "example": "day",
+              "type": "string",
+              "enum": [
+                "day",
+                "week"
+              ]
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per bucket, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityTimelineDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activity over time",
+        "tags": [
+          "activity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "analytics.view"
+        ]
+      }
+    },
+    "/activity/leaderboard": {
+      "get": {
+        "description": "Users ranked by how many events they performed in the range (default: last 30 days).",
+        "operationId": "ActivityController_leaderboard",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound; defaults to 30 days ago",
+            "schema": {
+              "example": "2026-09-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound; defaults to now",
+            "schema": {
+              "example": "2026-09-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events about one project. Events without a project (teams, clients, members, most chat rooms) never match a projectId filter.",
+            "schema": {
+              "example": "7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of row",
+            "schema": {
+              "example": "task",
+              "type": "string",
+              "enum": [
+                "project",
+                "task",
+                "subtask",
+                "milestone",
+                "team",
+                "client",
+                "badge",
+                "time_entry",
+                "chat_message",
+                "chat_channel",
+                "invitation",
+                "role",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of change",
+            "schema": {
+              "example": "created",
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "deleted",
+                "restored",
+                "accepted"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events performed by one user",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many actors to return; defaults to 10",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "example": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Actors and their event counts, most active first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityLeaderboardDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Most active users",
+        "tags": [
+          "activity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "analytics.view"
+        ]
+      }
+    },
+    "/activity/breakdown": {
+      "get": {
+        "description": "Event counts grouped by entity type and action for the active organization (default: last 30 days).",
+        "operationId": "ActivityController_breakdown",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound; defaults to 30 days ago",
+            "schema": {
+              "example": "2026-09-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound; defaults to now",
+            "schema": {
+              "example": "2026-09-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events about one project. Events without a project (teams, clients, members, most chat rooms) never match a projectId filter.",
+            "schema": {
+              "example": "7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of row",
+            "schema": {
+              "example": "task",
+              "type": "string",
+              "enum": [
+                "project",
+                "task",
+                "subtask",
+                "milestone",
+                "team",
+                "client",
+                "badge",
+                "time_entry",
+                "chat_message",
+                "chat_channel",
+                "invitation",
+                "role",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of change",
+            "schema": {
+              "example": "created",
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "deleted",
+                "restored",
+                "accepted"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events performed by one user",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Counts per entityType+action, most frequent first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityBreakdownDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "What kind of activity",
+        "tags": [
+          "activity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "analytics.view"
+        ]
+      }
+    },
+    "/activity/events": {
+      "get": {
+        "description": "The raw activity trail, newest first, paginated. Supports the same range and filters as the other analytics endpoints.",
+        "operationId": "ActivityController_events",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive lower bound; defaults to 30 days ago",
+            "schema": {
+              "example": "2026-09-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Inclusive upper bound; defaults to now",
+            "schema": {
+              "example": "2026-09-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events about one project. Events without a project (teams, clients, members, most chat rooms) never match a projectId filter.",
+            "schema": {
+              "example": "7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityType",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of row",
+            "schema": {
+              "example": "task",
+              "type": "string",
+              "enum": [
+                "project",
+                "task",
+                "subtask",
+                "milestone",
+                "team",
+                "client",
+                "badge",
+                "time_entry",
+                "chat_message",
+                "chat_channel",
+                "invitation",
+                "role",
+                "member"
+              ]
+            }
+          },
+          {
+            "name": "action",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to one kind of change",
+            "schema": {
+              "example": "created",
+              "type": "string",
+              "enum": [
+                "created",
+                "updated",
+                "deleted",
+                "restored",
+                "accepted"
+              ]
+            }
+          },
+          {
+            "name": "actorId",
+            "required": false,
+            "in": "query",
+            "description": "Restrict to events performed by one user",
+            "schema": {
+              "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number (1-based)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "x-organization-id",
+            "in": "header",
+            "description": "Active organization id. Optional on /organizations/:organizationId routes, required on every other organization-scoped route.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of activity events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityEventPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed (one message per invalid field) or a business rule was violated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid or expired access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied, or you are not a member of the active organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited. The `default` bucket allows 300 requests per 60 s per client IP; the auth routes use the stricter `auth` bucket.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Activity feed",
+        "tags": [
+          "activity"
+        ],
+        "x-auth": {
+          "required": true,
+          "scheme": "bearer",
+          "context": "organization"
+        },
+        "x-organization-context": {
+          "required": true,
+          "header": "x-organization-id",
+          "pathParameter": "organizationId"
+        },
+        "x-permissions": [
+          "analytics.view"
+        ]
+      }
     }
   },
   "info": {
@@ -13753,6 +14521,10 @@
     {
       "name": "dashboard",
       "description": "Dashboard metrics and summaries"
+    },
+    {
+      "name": "activity",
+      "description": "Activity trail and analytics: who did what, over time, ranked and broken down"
     },
     {
       "name": "settings",
@@ -14771,6 +15543,7 @@
                 "time_complexity.update",
                 "time_complexity.delete",
                 "dashboard.view",
+                "analytics.view",
                 "settings.view",
                 "settings.update",
                 "chat.view",
@@ -14876,6 +15649,7 @@
                 "time_complexity.update",
                 "time_complexity.delete",
                 "dashboard.view",
+                "analytics.view",
                 "settings.view",
                 "settings.update",
                 "chat.view",
@@ -18602,6 +19376,323 @@
         },
         "required": [
           "lastReadAt"
+        ]
+      },
+      "ActivityTimelineBucketDto": {
+        "type": "object",
+        "properties": {
+          "bucket": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00.000Z",
+            "description": "Bucket start, ISO 8601"
+          },
+          "count": {
+            "type": "number",
+            "example": 12,
+            "description": "Events in the bucket"
+          }
+        },
+        "required": [
+          "bucket",
+          "count"
+        ]
+      },
+      "ActivityTimelineDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00.000Z"
+          },
+          "to": {
+            "type": "string",
+            "example": "2026-09-30T23:59:59.999Z"
+          },
+          "groupBy": {
+            "type": "string",
+            "example": "day",
+            "enum": [
+              "day",
+              "week"
+            ]
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityTimelineBucketDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "groupBy",
+          "buckets"
+        ]
+      },
+      "ActivityLeaderboardEntryDto": {
+        "type": "object",
+        "properties": {
+          "actorId": {
+            "type": "object",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d",
+            "description": "The user; `null` for events whose actor was removed"
+          },
+          "name": {
+            "type": "object",
+            "example": "Ana López",
+            "nullable": true
+          },
+          "count": {
+            "type": "number",
+            "example": 47,
+            "description": "Events performed in the range"
+          }
+        },
+        "required": [
+          "actorId",
+          "name",
+          "count"
+        ]
+      },
+      "ActivityLeaderboardDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00.000Z"
+          },
+          "to": {
+            "type": "string",
+            "example": "2026-09-30T23:59:59.999Z"
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityLeaderboardEntryDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "entries"
+        ]
+      },
+      "ActivityBreakdownEntryDto": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "type": "string",
+            "example": "task",
+            "enum": [
+              "project",
+              "task",
+              "subtask",
+              "milestone",
+              "team",
+              "client",
+              "badge",
+              "time_entry",
+              "chat_message",
+              "chat_channel",
+              "invitation",
+              "role",
+              "member"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "example": "created",
+            "enum": [
+              "created",
+              "updated",
+              "deleted",
+              "restored",
+              "accepted"
+            ]
+          },
+          "count": {
+            "type": "number",
+            "example": 23,
+            "description": "Events of this kind"
+          }
+        },
+        "required": [
+          "entityType",
+          "action",
+          "count"
+        ]
+      },
+      "ActivityBreakdownDto": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00.000Z"
+          },
+          "to": {
+            "type": "string",
+            "example": "2026-09-30T23:59:59.999Z"
+          },
+          "total": {
+            "type": "number",
+            "example": 156,
+            "description": "All events in the range"
+          },
+          "items": {
+            "description": "Counts per entityType+action, most frequent first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityBreakdownEntryDto"
+            }
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "total",
+          "items"
+        ]
+      },
+      "ActivityActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "9a2b7c1d-4e5f-4a6b-8c9d-0e1f2a3b4c5d"
+          },
+          "name": {
+            "type": "object",
+            "example": "Ana López",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "ActivityEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "f3e2d1c0-b9a8-4c7d-8e6f-5a4b3c2d1e0f",
+            "description": "Event id"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "task",
+            "enum": [
+              "project",
+              "task",
+              "subtask",
+              "milestone",
+              "team",
+              "client",
+              "badge",
+              "time_entry",
+              "chat_message",
+              "chat_channel",
+              "invitation",
+              "role",
+              "member"
+            ]
+          },
+          "action": {
+            "type": "string",
+            "example": "created",
+            "enum": [
+              "created",
+              "updated",
+              "deleted",
+              "restored",
+              "accepted"
+            ]
+          },
+          "entityId": {
+            "type": "string",
+            "example": "1b2c3d4e-5f6a-4b7c-8d9e-0a1b2c3d4e5f",
+            "description": "Id of the row this event is about"
+          },
+          "projectId": {
+            "type": "object",
+            "example": "7c1d0a9b-8e7d-4c6b-9a5d-0e1f2a3b4c5d",
+            "nullable": true,
+            "description": "Project the event belongs to, when one is known"
+          },
+          "actor": {
+            "nullable": true,
+            "description": "Who did it; `null` when the user was removed",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ActivityActorDto"
+              }
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "nullable": true,
+            "example": {
+              "name": "Ship the beta"
+            },
+            "description": "Small extras a feed line needs, never required to render it"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-09-14T10:32:11.482Z"
+          }
+        },
+        "required": [
+          "id",
+          "entityType",
+          "action",
+          "entityId",
+          "projectId",
+          "actor",
+          "metadata",
+          "createdAt"
+        ]
+      },
+      "ActivityEventPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Records of the current page",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEventDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 42,
+            "description": "Total matching records"
+          },
+          "page": {
+            "type": "number",
+            "example": 1,
+            "description": "Current page (1-based)"
+          },
+          "limit": {
+            "type": "number",
+            "example": 20,
+            "description": "Items per page"
+          },
+          "totalPages": {
+            "type": "number",
+            "example": 3,
+            "description": "Total number of pages"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "totalPages"
         ]
       }
     }

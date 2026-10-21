@@ -16,6 +16,7 @@ import type { DataSource } from 'typeorm';
 const TABLES = [
   // Before their owners: both cascade from `users` and `organizations`, but
   // listing them first keeps the intent obvious if the cascade ever changes.
+  'activity_events',
   'organization_settings',
   'user_settings',
   'refresh_tokens',
